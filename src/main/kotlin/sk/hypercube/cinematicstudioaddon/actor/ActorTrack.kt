@@ -15,8 +15,8 @@ class ActorTrack(
     val id: String,
     val mode: TrackMode,
     val length: Int,
-    private val frames: List<ActorFrame> = emptyList(),
-    private val keyframes: List<Keyframe> = emptyList()
+    val frames: List<ActorFrame> = emptyList(),
+    val keyframes: List<Keyframe> = emptyList()
 ) {
     /** Resolves the actor's frame at [tick], or null if outside the track. */
     fun frameAt(tick: Int): ActorFrame? {

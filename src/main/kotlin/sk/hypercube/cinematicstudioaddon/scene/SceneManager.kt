@@ -5,6 +5,7 @@ import sk.hypercube.cinematicstudioaddon.CinematicStudioAddon
 import sk.hypercube.cinematicstudioaddon.actor.ActorBackend
 import sk.hypercube.cinematicstudioaddon.actor.ActorTrack
 import sk.hypercube.cinematicstudioaddon.actor.packet.PacketActorBackend
+import sk.hypercube.cinematicstudioaddon.record.TrackStorage
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -16,6 +17,9 @@ class SceneManager(private val plugin: CinematicStudioAddon) {
     private val scenes = ConcurrentHashMap<String, Scene>()
     private val tracks = ConcurrentHashMap<String, ActorTrack>()
     private val sessions = mutableListOf<SceneSession>()
+
+    private val sceneStorage = SceneStorage(plugin)
+    private val trackStorage = TrackStorage(plugin)
 
     /**
      * Built lazily and only if ProtocolLib is present (the backend touches ProtocolLib classes
@@ -32,8 +36,41 @@ class SceneManager(private val plugin: CinematicStudioAddon) {
 
     fun getScene(id: String): Scene? = scenes[id.lowercase()]
     fun getTrack(id: String): ActorTrack? = tracks[id.lowercase()]
-    fun registerScene(scene: Scene) { scenes[scene.id.lowercase()] = scene }
-    fun registerTrack(track: ActorTrack) { tracks[track.id.lowercase()] = track }
+    fun sceneIds(): List<String> = scenes.values.map { it.id }.sorted()
+    fun trackIds(): List<String> = tracks.values.map { it.id }.sorted()
+
+    /** Loads all persisted tracks and scenes from disk. Call once on enable. */
+    fun loadAll() {
+        trackStorage.loadAll().forEach { tracks[it.id.lowercase()] = it }
+        sceneStorage.loadAll().forEach { scenes[it.id.lowercase()] = it }
+        plugin.logger.info("Loaded ${tracks.size} actor track(s) and ${scenes.size} scene(s).")
+    }
+
+    // --- track CRUD -----------------------------------------------------------------------------
+
+    fun saveTrack(track: ActorTrack) {
+        tracks[track.id.lowercase()] = track
+        trackStorage.save(track)
+    }
+
+    fun deleteTrack(id: String): Boolean {
+        val removed = tracks.remove(id.lowercase()) != null
+        trackStorage.delete(id)
+        return removed
+    }
+
+    // --- scene CRUD -----------------------------------------------------------------------------
+
+    fun saveScene(scene: Scene) {
+        scenes[scene.id.lowercase()] = scene
+        sceneStorage.save(scene)
+    }
+
+    fun deleteScene(id: String): Boolean {
+        val removed = scenes.remove(id.lowercase()) != null
+        sceneStorage.delete(id)
+        return removed
+    }
 
     /** Starts [scene] for [viewers]: cinematic (via bridge) + actor session, aligned on this tick. */
     fun play(scene: Scene, viewers: Collection<Player>) {
@@ -65,7 +102,4 @@ class SceneManager(private val plugin: CinematicStudioAddon) {
     fun shutdown() {
         synchronized(sessions) { sessions.toList() }.forEach { it.stop() }
     }
-
-    // TODO(persistence): load scenes from scenes/*.yml and tracks from actortracks/*.json on enable;
-    //   save on change. See ACTOR_LAYER.md roadmap steps 4-5.
 }

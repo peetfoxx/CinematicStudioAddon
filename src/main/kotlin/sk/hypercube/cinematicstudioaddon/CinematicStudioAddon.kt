@@ -34,6 +34,7 @@ class CinematicStudioAddon : JavaPlugin() {
         bridge = CinematicBridge(this)
         sceneManager = SceneManager(this)
         actorRecorder = ActorRecorder(this)
+        sceneManager.loadAll()
 
         val command = getCommand("cinaddon")
         if (command == null) {

@@ -48,10 +48,11 @@ spawn → `ENTITY_METADATA` (pose/flags) → `ENTITY_EQUIPMENT`. Each tick: `ENT
 swings/damage. On despawn: `ENTITY_DESTROY` (+ `PLAYER_INFO` remove). Packet shapes are
 version-guarded for the target MC version. Packets are sent only to the session's viewers.
 
-## Persistence (planned)
+## Persistence
 
 - `scenes/<scene>.yml` — scene definitions (human-editable).
-- `actortracks/<track>.json` — recorded/keyframed tracks (compact; per-tick frames).
+- `actortracks/<track>.yml` — tracks; each frame is one compact delimited string
+  (`x;y;z;yaw;pitch;headYaw;pose;flags;anims`) so per-tick recordings stay small.
 
 ## Commands (planned, extend `/cinaddon`)
 
@@ -69,7 +70,7 @@ version-guarded for the target MC version. Packets are sent only to the session'
 2. ✅ Skeleton — data model + engine interfaces + session/manager wiring.
 3. ✅ `PacketActorBackend` for PLAYER actors — per-viewer spawn (skin), relative movement, head
    rotation, sneaking/glow/fire/invisible, swing animations. **Needs in-game testing on 1.21.4.**
-4. `ActorRecorder` capture + JSON track persistence + `/cinaddon actor` commands.
-5. `SceneManager` persistence + `/cinaddon scene` commands; wire `play` to bridge + session.
+4. ✅ `ActorRecorder` capture + track persistence + `/cinaddon actor` commands.
+5. ✅ `SceneManager` persistence + `/cinaddon scene` commands; `play` wired to bridge + session.
 6. Remaining packet work: equipment, full poses (swimming/sleeping/sitting), hurt/crit animations,
    large-jump teleport polish, non-PLAYER entity types; keyframe authoring; `actorCameraOffsetTicks`.

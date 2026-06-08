@@ -10,7 +10,7 @@ softdepend: [CinematicStudio, ProtocolLib]
 commands:
   cinaddon:
     description: CinematicStudioAddon commands
-    usage: /<command> <play|stop> <cinematic> <player|@a>
+    usage: /<command> <play|stop|actor|scene> ...
     aliases: [csa, cinematicaddon]
 
 permissions:
