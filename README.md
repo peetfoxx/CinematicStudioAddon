@@ -37,23 +37,27 @@ on the intended viewer no matter who triggered it.
 | `/cinaddon actor record <track>` | Start recording your movement into a track |
 | `/cinaddon actor stop` | Save the recording |
 | `/cinaddon actor list` / `delete <track>` | Manage recorded tracks |
-| `/cinaddon scene create <scene> [cinematic]` | Create a scene in your current world |
-| `/cinaddon scene addactor <scene> <track> [startTick]` | Add a recorded actor to a scene |
-| `/cinaddon scene removeactor <scene> <index>` | Remove an actor from a scene |
-| `/cinaddon scene info <scene>` / `list` / `delete <scene>` | Manage scenes |
-| `/cinaddon scene play <scene> <player\|@a>` | Play cinematic + actors together |
+| `/cinaddon spawnactors <track> <player\|@a>` | Spawn a recorded actor for player(s) |
 
 Aliases: `/csa`, `/cinematicaddon`
 
 ### Quick start: a custom actor
 
 ```
-/cinaddon actor record intro_walk      # walk the path you want the actor to take
-/cinaddon actor stop                   # saves the track
-/cinaddon scene create intro my_cinematic
-/cinaddon scene addactor intro intro_walk
-/cinaddon scene play intro <player>    # cinematic camera + your actor, in sync
+/cinaddon actor record guard           # walk the path you want the actor to take
+/cinaddon actor stop                   # saves the track (with your skin + equipment)
 ```
+
+Then add a **COMMAND node** in the CinematicStudio editor, at the tick where the actor should appear:
+
+```yaml
+type: COMMAND
+command: cinaddon spawnactors guard %player%
+console: true
+```
+
+Now whenever that cinematic plays for someone, the actor spawns for that exact viewer, sequenced by
+the cinematic's own timeline. `console: true` means viewers don't need any permission.
 
 | Permission | Default | Description |
 | --- | --- | --- |

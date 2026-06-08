@@ -7,9 +7,6 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import sk.hypercube.cinematicstudioaddon.CinematicStudioAddon
-import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
-import sk.hypercube.cinematicstudioaddon.scene.Scene
-import sk.hypercube.cinematicstudioaddon.scene.SceneActor
 import java.io.File
 
 /**
@@ -20,11 +17,10 @@ import java.io.File
  *  actor record <track>                   start recording your movement (players only)
  *  actor stop                             save the recording
  *  actor list | delete <track>
- *  scene create <scene> [cinematic]       create a scene in your current world (players only)
- *  scene delete <scene> | list | info <scene>
- *  scene addactor <scene> <track> [startTick]
- *  scene removeactor <scene> <index>
- *  scene play <scene> <player|@a>         play cinematic + actors together
+ *  spawnactors <track> <player|@a>        spawn a recorded actor for player(s)
+ *
+ * The intended way to put an actor in a cinematic is a CinematicStudio COMMAND node:
+ *   command: cinaddon spawnactors <track> %player%   (console: true)
  */
 class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandExecutor, TabCompleter {
 
@@ -42,7 +38,7 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
         when (args[0].lowercase()) {
             "play", "stop" -> handlePlayStop(sender, label, args)
             "actor" -> handleActor(sender, label, args)
-            "scene" -> handleScene(sender, label, args)
+            "spawnactors" -> handleSpawnActors(sender, label, args)
             else -> sendUsage(sender, label)
         }
         return true
@@ -88,16 +84,16 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
                 val player = sender as? Player ?: return sender.sendMessage("§cOnly players can record.")
                 val track = plugin.actorRecorder.stop(player)
                     ?: return sender.sendMessage("§cYou are not recording.")
-                plugin.sceneManager.saveTrack(track)
+                plugin.actorManager.saveTrack(track)
                 sender.sendMessage("§aSaved track §e${track.id}§a (§e${track.length}§a ticks ≈ §e${track.length / 20}§as).")
             }
             "list" -> {
-                val ids = plugin.sceneManager.trackIds()
+                val ids = plugin.actorManager.trackIds()
                 sender.sendMessage(if (ids.isEmpty()) "§7No tracks recorded yet." else "§6Tracks: §f${ids.joinToString(", ")}")
             }
             "delete" -> {
                 val track = args.getOrNull(2) ?: return sender.sendMessage("§cUsage: §e/$label actor delete <track>")
-                if (plugin.sceneManager.deleteTrack(track)) sender.sendMessage("§aDeleted track §e$track§a.")
+                if (plugin.actorManager.deleteTrack(track)) sender.sendMessage("§aDeleted track §e$track§a.")
                 else sender.sendMessage("§cNo such track: §e$track§c.")
             }
             else -> {
@@ -108,95 +104,18 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
         }
     }
 
-    // --- scenes ---------------------------------------------------------------------------------
+    // --- spawn an actor (typically called from a CinematicStudio COMMAND node) -------------------
 
-    private fun handleScene(sender: CommandSender, label: String, args: Array<out String>) {
-        when (args.getOrNull(1)?.lowercase()) {
-            "create" -> {
-                val player = sender as? Player ?: return sender.sendMessage("§cOnly players can create scenes (world is taken from your location).")
-                val id = args.getOrNull(2) ?: return sender.sendMessage("§cUsage: §e/$label scene create <scene> [cinematic]")
-                if (plugin.sceneManager.getScene(id) != null) return sender.sendMessage("§cScene §e$id§c already exists.")
-                val cinematic = args.getOrNull(3)
-                plugin.sceneManager.saveScene(Scene(id = id, world = player.world.name, cinematic = cinematic))
-                sender.sendMessage("§aCreated scene §e$id§a${if (cinematic != null) " (cinematic §e$cinematic§a)" else ""}.")
-            }
-            "delete" -> {
-                val id = args.getOrNull(2) ?: return sender.sendMessage("§cUsage: §e/$label scene delete <scene>")
-                if (plugin.sceneManager.deleteScene(id)) sender.sendMessage("§aDeleted scene §e$id§a.")
-                else sender.sendMessage("§cNo such scene: §e$id§c.")
-            }
-            "list" -> {
-                val ids = plugin.sceneManager.sceneIds()
-                sender.sendMessage(if (ids.isEmpty()) "§7No scenes yet." else "§6Scenes: §f${ids.joinToString(", ")}")
-            }
-            "info" -> {
-                val scene = args.getOrNull(2)?.let { plugin.sceneManager.getScene(it) }
-                    ?: return sender.sendMessage("§cUsage: §e/$label scene info <scene>")
-                sender.sendMessage("§6Scene §e${scene.id}§7 (world §f${scene.world}§7)")
-                sender.sendMessage("§7  cinematic: §f${scene.cinematic ?: "none"}  §7trackable: §f${scene.trackable}  §7offset: §f${scene.actorCameraOffsetTicks}")
-                if (scene.actors.isEmpty()) sender.sendMessage("§7  actors: none")
-                else scene.actors.forEachIndexed { i, a ->
-                    sender.sendMessage("§7  [$i] track §f${a.trackId}§7 start §f${a.startTick}§7 origin §f${a.origin.mode}")
-                }
-            }
-            "addactor" -> {
-                val scene = args.getOrNull(2)?.let { plugin.sceneManager.getScene(it) }
-                    ?: return sender.sendMessage("§cUsage: §e/$label scene addactor <scene> <track> [startTick]")
-                val trackId = args.getOrNull(3) ?: return sender.sendMessage("§cUsage: §e/$label scene addactor <scene> <track> [startTick]")
-                val track = plugin.sceneManager.getTrack(trackId) ?: return sender.sendMessage("§cNo such track: §e$trackId§c.")
-                val startTick = args.getOrNull(4)?.toIntOrNull() ?: 0
-                val appearance = track.appearance ?: ActorAppearance()
-                val updated = scene.copy(actors = scene.actors + SceneActor(trackId = trackId, appearance = appearance, startTick = startTick))
-                plugin.sceneManager.saveScene(updated)
-                val skinNote = if (track.appearance?.skinTextureValue != null) " §7(skin + equipment inherited)" else ""
-                sender.sendMessage("§aAdded actor (track §e$trackId§a, start §e$startTick§a) to scene §e${scene.id}§a.$skinNote")
-            }
-            "removeactor" -> {
-                val scene = args.getOrNull(2)?.let { plugin.sceneManager.getScene(it) }
-                    ?: return sender.sendMessage("§cUsage: §e/$label scene removeactor <scene> <index>")
-                val index = args.getOrNull(3)?.toIntOrNull()
-                    ?: return sender.sendMessage("§cUsage: §e/$label scene removeactor <scene> <index>")
-                if (index !in scene.actors.indices) return sender.sendMessage("§cIndex out of range (0..${scene.actors.size - 1}).")
-                val updated = scene.copy(actors = scene.actors.filterIndexed { i, _ -> i != index })
-                plugin.sceneManager.saveScene(updated)
-                sender.sendMessage("§aRemoved actor §e[$index]§a from scene §e${scene.id}§a.")
-            }
-            "setskin" -> {
-                val scene = args.getOrNull(2)?.let { plugin.sceneManager.getScene(it) }
-                    ?: return sender.sendMessage("§cUsage: §e/$label scene setskin <scene> <index> <player>")
-                val index = args.getOrNull(3)?.toIntOrNull()
-                    ?: return sender.sendMessage("§cUsage: §e/$label scene setskin <scene> <index> <player>")
-                if (index !in scene.actors.indices) return sender.sendMessage("§cIndex out of range (0..${scene.actors.size - 1}).")
-                val playerName = args.getOrNull(4) ?: return sender.sendMessage("§cUsage: §e/$label scene setskin <scene> <index> <player>")
-                val source = Bukkit.getPlayerExact(playerName) ?: return sender.sendMessage("§cPlayer '§e$playerName§c' is not online.")
-                val textures = source.playerProfile.properties.firstOrNull { it.name == "textures" }
-                    ?: return sender.sendMessage("§cCould not read §e$playerName§c's skin.")
-                val actor = scene.actors[index]
-                val newActor = actor.copy(
-                    appearance = actor.appearance.copy(
-                        skinTextureValue = textures.value,
-                        skinSignature = textures.signature,
-                        displayName = actor.appearance.displayName ?: source.name
-                    )
-                )
-                val updated = scene.copy(actors = scene.actors.mapIndexed { i, a -> if (i == index) newActor else a })
-                plugin.sceneManager.saveScene(updated)
-                sender.sendMessage("§aSet actor §e[$index]§a skin to §e${source.name}§a's.")
-            }
-            "play" -> {
-                val scene = args.getOrNull(2)?.let { plugin.sceneManager.getScene(it) }
-                    ?: return sender.sendMessage("§cUsage: §e/$label scene play <scene> <player|@a>")
-                val target = args.getOrNull(3) ?: return sender.sendMessage("§cUsage: §e/$label scene play <scene> <player|@a>")
-                val targets = resolveTargets(sender, target) ?: return
-                plugin.sceneManager.play(scene, targets)
-                sender.sendMessage("§aPlaying scene §e${scene.id}§a for §e${targets.size}§a player(s).")
-            }
-            else -> {
-                sender.sendMessage("§e/$label scene create <scene> [cinematic] §7| §edelete <scene> §7| §elist §7| §einfo <scene>")
-                sender.sendMessage("§e/$label scene addactor <scene> <track> [startTick] §7| §eremoveactor <scene> <index>")
-                sender.sendMessage("§e/$label scene setskin <scene> <index> <player> §7| §eplay <scene> <player|@a>")
-            }
+    private fun handleSpawnActors(sender: CommandSender, label: String, args: Array<out String>) {
+        val trackId = args.getOrNull(1) ?: return sender.sendMessage("§cUsage: §e/$label spawnactors <track> <player|@a>")
+        val track = plugin.actorManager.getTrack(trackId) ?: return sender.sendMessage("§cNo such track: §e$trackId§c.")
+        val targetArg = args.getOrNull(2) ?: return sender.sendMessage("§cUsage: §e/$label spawnactors <track> <player|@a>")
+        val targets = resolveTargets(sender, targetArg) ?: return
+        if (!plugin.actorManager.spawn(track, targets)) {
+            sender.sendMessage("§cActor playback is unavailable (ProtocolLib not installed).")
         }
+        // Success is intentionally silent: this command is usually fired by a console COMMAND node
+        // once per viewer, and we don't want to spam the console.
     }
 
     // --- helpers --------------------------------------------------------------------------------
@@ -216,8 +135,8 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
     private fun sendUsage(sender: CommandSender, label: String) {
         sender.sendMessage("§6CinematicStudioAddon")
         sender.sendMessage("§e/$label play|stop <cinematic> <player|@a> §7- direct cinematic playback")
-        sender.sendMessage("§e/$label actor ... §7- record movement tracks")
-        sender.sendMessage("§e/$label scene ... §7- build & play scenes (cinematic + actors)")
+        sender.sendMessage("§e/$label actor record|stop|list|delete §7- manage movement tracks")
+        sender.sendMessage("§e/$label spawnactors <track> <player|@a> §7- spawn a recorded actor")
     }
 
     // --- tab completion -------------------------------------------------------------------------
@@ -234,26 +153,16 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
             "actor" -> when (args.size) {
                 1 -> listOf("actor")
                 2 -> listOf("record", "stop", "list", "delete")
-                3 -> if (args[1].equals("delete", true)) plugin.sceneManager.trackIds() else emptyList()
+                3 -> if (args[1].equals("delete", true)) plugin.actorManager.trackIds() else emptyList()
                 else -> emptyList()
             }
-            "scene" -> when (args.size) {
-                1 -> listOf("scene")
-                2 -> listOf("create", "delete", "list", "info", "addactor", "removeactor", "setskin", "play")
-                3 -> when (args[1].lowercase()) {
-                    "delete", "info", "addactor", "removeactor", "setskin", "play" -> plugin.sceneManager.sceneIds()
-                    else -> emptyList()
-                }
-                4 -> when (args[1].lowercase()) {
-                    "create" -> listCinematics()
-                    "addactor" -> plugin.sceneManager.trackIds()
-                    "play" -> playerTargets()
-                    else -> emptyList()
-                }
-                5 -> if (args[1].equals("setskin", true)) playerTargets() else emptyList()
+            "spawnactors" -> when (args.size) {
+                1 -> listOf("spawnactors")
+                2 -> plugin.actorManager.trackIds()
+                3 -> playerTargets()
                 else -> emptyList()
             }
-            else -> if (args.size == 1) listOf("play", "stop", "actor", "scene") else emptyList()
+            else -> if (args.size == 1) listOf("play", "stop", "actor", "spawnactors") else emptyList()
         }
         val prefix = args.last()
         return out.filter { it.startsWith(prefix, ignoreCase = true) }.toMutableList()

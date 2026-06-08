@@ -2,9 +2,9 @@ package sk.hypercube.cinematicstudioaddon
 
 import org.bukkit.plugin.java.JavaPlugin
 import sk.hypercube.cinematicstudioaddon.command.CinematicAddonCommand
+import sk.hypercube.cinematicstudioaddon.playback.ActorManager
+import sk.hypercube.cinematicstudioaddon.playback.QuitListener
 import sk.hypercube.cinematicstudioaddon.record.ActorRecorder
-import sk.hypercube.cinematicstudioaddon.scene.PlayerSessionListener
-import sk.hypercube.cinematicstudioaddon.scene.SceneManager
 
 /**
  * CinematicStudioAddon - an open-source companion plugin for LoneDev's CinematicStudio.
@@ -16,15 +16,17 @@ import sk.hypercube.cinematicstudioaddon.scene.SceneManager
  * trigger comes from the console or a command block. CinematicStudio binds playback to the
  * command sender, so we dispatch its command *as the target player* (see [CinematicBridge]).
  *
- * Feature 2 (in progress): a self-contained, per-viewer actor layer (packet NPCs) synced to
- * cinematic playback, to replace CinematicStudio's unreliable built-in actors. See docs/ACTOR_LAYER.md.
+ * Feature 2 (in progress): a self-contained, per-viewer actor layer (packet NPCs). Actors are
+ * recorded as tracks and spawned directly for player(s) — typically from a CinematicStudio COMMAND
+ * node (`cinaddon spawnactors <track> %player%`), so the cinematic's timeline does the sequencing.
+ * See docs/ACTOR_LAYER.md.
  */
 class CinematicStudioAddon : JavaPlugin() {
 
     lateinit var bridge: CinematicBridge
         private set
 
-    lateinit var sceneManager: SceneManager
+    lateinit var actorManager: ActorManager
         private set
 
     lateinit var actorRecorder: ActorRecorder
@@ -32,9 +34,9 @@ class CinematicStudioAddon : JavaPlugin() {
 
     override fun onEnable() {
         bridge = CinematicBridge(this)
-        sceneManager = SceneManager(this)
+        actorManager = ActorManager(this)
         actorRecorder = ActorRecorder(this)
-        sceneManager.loadAll()
+        actorManager.loadAll()
 
         val command = getCommand("cinaddon")
         if (command == null) {
@@ -46,7 +48,7 @@ class CinematicStudioAddon : JavaPlugin() {
         command.setExecutor(executor)
         command.tabCompleter = executor
 
-        server.pluginManager.registerEvents(PlayerSessionListener(sceneManager), this)
+        server.pluginManager.registerEvents(QuitListener(actorManager), this)
 
         if (!bridge.isCinematicStudioPresent()) {
             logger.warning("CinematicStudio is not installed or not enabled. Commands will report an error until it is available.")
@@ -56,7 +58,7 @@ class CinematicStudioAddon : JavaPlugin() {
     }
 
     override fun onDisable() {
-        if (::sceneManager.isInitialized) sceneManager.shutdown()
+        if (::actorManager.isInitialized) actorManager.shutdown()
         if (::actorRecorder.isInitialized) actorRecorder.cancelAll()
         logger.info("CinematicStudioAddon disabled.")
     }
