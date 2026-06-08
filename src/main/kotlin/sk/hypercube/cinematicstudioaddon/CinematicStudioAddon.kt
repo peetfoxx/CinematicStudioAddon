@@ -2,9 +2,11 @@ package sk.hypercube.cinematicstudioaddon
 
 import org.bukkit.plugin.java.JavaPlugin
 import sk.hypercube.cinematicstudioaddon.command.CinematicAddonCommand
+import sk.hypercube.cinematicstudioaddon.actor.ActorTrack
 import sk.hypercube.cinematicstudioaddon.playback.ActorManager
 import sk.hypercube.cinematicstudioaddon.playback.QuitListener
 import sk.hypercube.cinematicstudioaddon.record.ActorRecorder
+import sk.hypercube.cinematicstudioaddon.record.RecordingListener
 
 /**
  * CinematicStudioAddon - an open-source companion plugin for LoneDev's CinematicStudio.
@@ -49,6 +51,7 @@ class CinematicStudioAddon : JavaPlugin() {
         command.tabCompleter = executor
 
         server.pluginManager.registerEvents(QuitListener(actorManager), this)
+        server.pluginManager.registerEvents(RecordingListener(this), this)
 
         if (!bridge.isCinematicStudioPresent()) {
             logger.warning("CinematicStudio is not installed or not enabled. Commands will report an error until it is available.")
@@ -61,5 +64,12 @@ class CinematicStudioAddon : JavaPlugin() {
         if (::actorManager.isInitialized) actorManager.shutdown()
         if (::actorRecorder.isInitialized) actorRecorder.cancelAll()
         logger.info("CinematicStudioAddon disabled.")
+    }
+
+    /** Stops the player's recording and persists the captured track. Returns null if not recording. */
+    fun finishRecording(player: org.bukkit.entity.Player): ActorTrack? {
+        val track = actorRecorder.stop(player) ?: return null
+        actorManager.saveTrack(track)
+        return track
     }
 }

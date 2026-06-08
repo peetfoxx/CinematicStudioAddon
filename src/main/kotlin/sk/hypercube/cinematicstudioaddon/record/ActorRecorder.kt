@@ -1,5 +1,7 @@
 package sk.hypercube.cinematicstudioaddon.record
 
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.entity.Player
 import org.bukkit.plugin.Plugin
 import org.bukkit.scheduler.BukkitTask
@@ -11,6 +13,7 @@ import sk.hypercube.cinematicstudioaddon.actor.ActorPose
 import sk.hypercube.cinematicstudioaddon.actor.ActorTrack
 import sk.hypercube.cinematicstudioaddon.actor.ItemCodec
 import sk.hypercube.cinematicstudioaddon.actor.TrackMode
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -44,15 +47,22 @@ class ActorRecorder(private val plugin: Plugin) {
                 pose = if (player.isSneaking) ActorPose.SNEAKING else ActorPose.STANDING,
                 flags = buildSet { if (player.isGlowing) add(ActorFlag.GLOWING) }
             )
+            player.sendActionBar(recordingHud(session.frames.size))
         }, 0L, 1L)
         sessions[player.uniqueId] = session
         return true
+    }
+
+    private fun recordingHud(ticks: Int): Component {
+        val text = String.format(Locale.US, "§c● REC §8| §f%d ticks §7(§f%.1fs§7) §8| §7press §fF §7to stop", ticks, ticks / 20.0)
+        return LegacyComponentSerializer.legacySection().deserialize(text)
     }
 
     /** Stops recording [player] and returns the captured track, or null if not recording. */
     fun stop(player: Player): ActorTrack? {
         val session = sessions.remove(player.uniqueId) ?: return null
         session.task?.cancel()
+        player.sendActionBar(Component.empty())
         return ActorTrack(
             id = session.trackId,
             mode = TrackMode.RECORDED,

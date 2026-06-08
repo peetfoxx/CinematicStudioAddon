@@ -87,7 +87,8 @@ ModelEngine is an optional soft dependency, hooked via reflection.
 
 ```
 /cinaddon actor record guard           # walk the path you want the actor to take
-/cinaddon actor stop                   # saves the track (with your skin + equipment)
+# a "● REC | <n> ticks (<s>s)" HUD shows in the action bar while recording
+# press F (or /cinaddon actor stop) to finish — saves the track with your skin + equipment
 ```
 
 Then add a **COMMAND node** in the CinematicStudio editor, at the tick where the actor should appear:

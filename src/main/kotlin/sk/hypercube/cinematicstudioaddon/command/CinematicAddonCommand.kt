@@ -76,16 +76,15 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
                 val player = sender as? Player ?: return sender.sendMessage("§cOnly players can record.")
                 val track = args.getOrNull(2) ?: return sender.sendMessage("§cUsage: §e/$label actor record <track>")
                 if (plugin.actorRecorder.start(player, track)) {
-                    sender.sendMessage("§aRecording track §e$track§a. Move around, then §e/$label actor stop§a.")
+                    sender.sendMessage("§aRecording track §e$track§a. Move around, then press §eF§a (or §e/$label actor stop§a).")
                 } else {
-                    sender.sendMessage("§cYou are already recording. Use §e/$label actor stop§c first.")
+                    sender.sendMessage("§cYou are already recording. Press §eF§c or §e/$label actor stop§c first.")
                 }
             }
             "stop" -> {
                 val player = sender as? Player ?: return sender.sendMessage("§cOnly players can record.")
-                val track = plugin.actorRecorder.stop(player)
+                val track = plugin.finishRecording(player)
                     ?: return sender.sendMessage("§cYou are not recording.")
-                plugin.actorManager.saveTrack(track)
                 sender.sendMessage("§aSaved track §e${track.id}§a (§e${track.length}§a ticks ≈ §e${track.length / 20}§as).")
             }
             "list" -> {
