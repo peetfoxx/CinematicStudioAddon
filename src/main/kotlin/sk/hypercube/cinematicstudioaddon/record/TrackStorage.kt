@@ -42,6 +42,7 @@ class TrackStorage(plugin: Plugin) {
             cfg.set("appearance.displayName", a.displayName)
             cfg.set("appearance.skinTextureValue", a.skinTextureValue)
             cfg.set("appearance.skinSignature", a.skinSignature)
+            cfg.set("appearance.model", a.model)
             writeEquipment(cfg, "appearance.equipment", a.equipment)
         }
         track.states.forEach { (name, state) ->
@@ -68,6 +69,7 @@ class TrackStorage(plugin: Plugin) {
                 displayName = cfg.getString("appearance.displayName"),
                 skinTextureValue = cfg.getString("appearance.skinTextureValue"),
                 skinSignature = cfg.getString("appearance.skinSignature"),
+                model = cfg.getString("appearance.model"),
                 equipment = readEquipment(cfg, "appearance.equipment")
             )
         } else null

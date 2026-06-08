@@ -4,8 +4,9 @@ import org.bukkit.entity.Player
 import sk.hypercube.cinematicstudioaddon.CinematicStudioAddon
 import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
 import sk.hypercube.cinematicstudioaddon.actor.ActorBackend
+import sk.hypercube.cinematicstudioaddon.actor.ActorBackendRouter
 import sk.hypercube.cinematicstudioaddon.actor.ActorTrack
-import sk.hypercube.cinematicstudioaddon.actor.packet.PacketActorBackend
+import sk.hypercube.cinematicstudioaddon.modelengine.ModelEngineHook
 import sk.hypercube.cinematicstudioaddon.record.TrackStorage
 import java.util.concurrent.ConcurrentHashMap
 
@@ -20,18 +21,10 @@ class ActorManager(private val plugin: CinematicStudioAddon) {
     private val trackStorage = TrackStorage(plugin)
     private val sessions = mutableListOf<ActorSession>()
 
-    /**
-     * Built lazily and only if ProtocolLib is present (the backend touches ProtocolLib classes
-     * eagerly). Null means actor playback is unavailable.
-     */
-    private val backend: ActorBackend? by lazy {
-        if (plugin.server.pluginManager.getPlugin("ProtocolLib")?.isEnabled == true) {
-            PacketActorBackend(plugin)
-        } else {
-            plugin.logger.warning("ProtocolLib not found - actor playback is disabled.")
-            null
-        }
-    }
+    private val backend: ActorBackend by lazy { ActorBackendRouter(plugin) }
+
+    private val protocolLibAvailable: Boolean
+        get() = plugin.server.pluginManager.getPlugin("ProtocolLib")?.isEnabled == true
 
     fun getTrack(id: String): ActorTrack? = tracks[id.lowercase()]
     fun trackIds(): List<String> = tracks.values.map { it.id }.sorted()
@@ -53,13 +46,25 @@ class ActorManager(private val plugin: CinematicStudioAddon) {
         return removed
     }
 
-    /** Spawns [track]'s actor for [viewers], playing it once. Returns false if ProtocolLib is missing. */
+    /**
+     * Spawns [track]'s actor for [viewers], playing it once. Returns false if the required backend
+     * plugin is missing (ModelEngine for model actors, ProtocolLib for packet actors).
+     */
     fun spawn(track: ActorTrack, viewers: Collection<Player>): Boolean {
-        val backend = this.backend ?: return false
+        val appearance = track.appearance ?: ActorAppearance()
+        if (appearance.model != null) {
+            if (!ModelEngineHook.isAvailable()) {
+                plugin.logger.warning("Track '${track.id}' uses a model but ModelEngine is not installed.")
+                return false
+            }
+        } else if (!protocolLibAvailable) {
+            plugin.logger.warning("Track '${track.id}' needs ProtocolLib for packet actors, which is not installed.")
+            return false
+        }
         val session = ActorSession(
             plugin = plugin,
             track = track,
-            appearance = track.appearance ?: ActorAppearance(),
+            appearance = appearance,
             viewers = viewers.toMutableSet(),
             backend = backend,
             onComplete = { finished -> synchronized(sessions) { sessions.remove(finished) } }

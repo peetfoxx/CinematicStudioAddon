@@ -65,7 +65,7 @@ class ActorSession(
         state.flags?.let { h.setFlagOverlay(it) }
         state.name?.let { h.setName(it) }
         state.equipment?.let { h.setEquipment(it) }
-        // state.animation is handled by the ModelEngine integration (not yet wired).
+        state.animation?.let { h.playModelAnimation(it) }
     }
 
     fun stop() {

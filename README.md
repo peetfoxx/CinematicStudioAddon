@@ -52,6 +52,7 @@ appearance:
   entityType: PLAYER          # any Bukkit entity type: ZOMBIE, ARMOR_STAND, ...
   displayName: "Town Guard"   # profile name (players) / name tag (mobs)
   skinTextureValue: "..."     # captured from the recorder; editable
+  model: "town_guard"         # ModelEngine model id (optional) — renders a custom model
   equipment:
     mainHand: "itemsadder:weapons:ruby_sword"   # ItemsAdder id
     helmet: "DIAMOND_HELMET"                     # material name
@@ -74,6 +75,13 @@ Item specs accept an ItemsAdder id (`itemsadder:ns:id` / `ia:ns:id`), a material
 
 States can also be triggered live from a CinematicStudio **COMMAND node**:
 `cinaddon state guard %player% draw_weapon` (`console: true`).
+
+#### ModelEngine actors
+
+Set `appearance.model` to a ModelEngine blueprint id to render the actor as a custom model. These
+use a real (invisible) base entity, so — unlike packet actors — they are **visible to everyone
+nearby, not per-viewer**. A state's `animation:` field plays the named MEG animation on the model.
+ModelEngine is an optional soft dependency, hooked via reflection.
 
 ### Quick start: a custom actor
 

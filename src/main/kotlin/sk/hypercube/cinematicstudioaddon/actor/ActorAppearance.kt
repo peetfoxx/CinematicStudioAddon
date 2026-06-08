@@ -20,6 +20,11 @@ data class ActorAppearance(
     val skinTextureValue: String? = null,
     val skinSignature: String? = null,
     /**
+     * ModelEngine model (blueprint) id. When set and ModelEngine is installed, the actor is rendered
+     * as that model on a real base entity (visible to everyone nearby) instead of a packet entity.
+     */
+    val model: String? = null,
+    /**
      * Each slot is an item spec: a captured base64 ItemStack, an ItemsAdder id
      * (`itemsadder:namespace:id` or `ia:...`), or a material name (`mc:DIAMOND_SWORD` or `STONE`).
      * Resolved by [ItemResolver].

@@ -71,7 +71,15 @@ not listed) → `SPAWN_ENTITY` → `ENTITY_METADATA` (skin parts 0x7F @ index 17
 6. ✅ Customization: arbitrary entity type, custom name, equipment (ItemsAdder / material / base64
    via `ItemResolver`), skin; named **states** (flags/name/equipment) triggered by the track
    `timeline:` or `/cinaddon state` (e.g. a COMMAND node).
-7. **ModelEngine** (next): custom models. Needs a real base entity (global visibility), driven each
-   tick + MEG animations wired to `ActorState.animation`. Soft-hooked via reflection.
+7. ✅ **ModelEngine**: `appearance.model` renders the actor as a MEG model on a real invisible
+   armor-stand base (global visibility), teleported each tick; `ActorState.animation` plays MEG
+   animations. Reflection-only (`ModelEngineHook`); `ActorBackendRouter` picks MEG vs packet.
+   **Needs in-game verification against the installed MEG version.**
 8. Remaining: per-frame equipment/item-use, full poses (swimming/sleeping/sitting), hurt/crit
    animations, keyframe authoring.
+
+## Backend routing
+
+`ActorBackendRouter.spawn` chooses per actor: `appearance.model != null` + ModelEngine present ->
+`ModelEngineActor` (real entity); otherwise `PacketActor` (per-viewer, needs ProtocolLib).
+`ActorManager` checks the required plugin is installed before spawning.

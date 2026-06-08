@@ -18,6 +18,9 @@ interface ActorHandle {
     /** Fire one-shot animations for the current tick. */
     fun playAnimations(animations: Set<ActorAnimation>)
 
+    /** Play a ModelEngine animation by name (no-op for non-model actors). */
+    fun playModelAnimation(animation: String)
+
     /** Replace the actor's equipment (item specs resolved by [sk.hypercube.cinematicstudioaddon.actor.ItemResolver]). */
     fun setEquipment(equipment: ActorEquipment)
 

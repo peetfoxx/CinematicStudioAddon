@@ -139,6 +139,10 @@ class PacketActor(
         }
     }
 
+    override fun playModelAnimation(animation: String) {
+        // Packet actors have no model; ModelEngine animations only apply to ModelEngineActor.
+    }
+
     // --- state changes --------------------------------------------------------------------------
 
     override fun setEquipment(equipment: ActorEquipment) {
