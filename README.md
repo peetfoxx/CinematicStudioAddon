@@ -39,13 +39,30 @@ on the intended viewer no matter who triggered it.
 | `/cinaddon actor list` / `delete <track>` | Manage recorded tracks |
 | `/cinaddon spawnactors <track> <player\|@a>` | Spawn a recorded actor for player(s) |
 | `/cinaddon state <track> <player\|@a> <state>` | Trigger a named actor state |
+| `/cinaddon actor set <track> <field> <value>` | Customize an actor in-game (see below) |
+| `/cinaddon reload` | Re-read track files from disk |
 
 Aliases: `/csa`, `/cinematicaddon`
 
 ### Customizing an actor
 
-A recorded track is saved to `actortracks/<track>.yml`. Edit the `appearance` section to change how
-the actor looks, and add `states` / `timeline` to script changes during playback:
+You can customize an actor either in-game or by editing its file.
+
+**In-game** (no restart needed):
+
+```
+/cinaddon actor set guard entitytype ZOMBIE
+/cinaddon actor set guard name "Town Guard"
+/cinaddon actor set guard model town_guard          # ModelEngine model id
+/cinaddon actor set guard skin Notch                # copy an online player's skin
+/cinaddon actor set guard mainhand itemsadder:weapons:ruby_sword
+/cinaddon actor set guard helmet DIAMOND_HELMET
+/cinaddon actor set guard helmet none               # 'none' clears a field
+```
+
+**By file:** each track is saved to `actortracks/<track>.yml`. Edit the `appearance` section to
+change how the actor looks, and add `states` / `timeline` to script changes during playback. After
+editing files by hand, run `/cinaddon reload` to apply without restarting.
 
 ```yaml
 appearance:

@@ -5,8 +5,11 @@ import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
+import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
 import sk.hypercube.cinematicstudioaddon.CinematicStudioAddon
+import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
+import sk.hypercube.cinematicstudioaddon.actor.ActorEquipment
 import java.io.File
 
 /**
@@ -40,6 +43,10 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
             "actor" -> handleActor(sender, label, args)
             "spawnactors" -> handleSpawnActors(sender, label, args)
             "state" -> handleState(sender, label, args)
+            "reload" -> {
+                val count = plugin.actorManager.reload()
+                sender.sendMessage("§aReloaded §e$count§a actor track(s) from disk.")
+            }
             else -> sendUsage(sender, label)
         }
         return true
@@ -96,12 +103,69 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
                 if (plugin.actorManager.deleteTrack(track)) sender.sendMessage("§aDeleted track §e$track§a.")
                 else sender.sendMessage("§cNo such track: §e$track§c.")
             }
+            "set" -> handleActorSet(sender, label, args)
             else -> {
                 sender.sendMessage("§e/$label actor record <track> §7- start recording your movement")
                 sender.sendMessage("§e/$label actor stop §7- save the recording")
                 sender.sendMessage("§e/$label actor list §7| §edelete <track>")
+                sender.sendMessage("§e/$label actor set <track> <field> <value> §7- customize an actor")
             }
         }
+    }
+
+    private val equipmentSlots = setOf("mainhand", "offhand", "helmet", "chestplate", "leggings", "boots")
+
+    /** `/cinaddon actor set <track> <field> <value>` — customize a track's appearance. */
+    private fun handleActorSet(sender: CommandSender, label: String, args: Array<out String>) {
+        val trackId = args.getOrNull(2) ?: return sendSetUsage(sender, label)
+        val track = plugin.actorManager.getTrack(trackId) ?: return sender.sendMessage("§cNo such track: §e$trackId§c.")
+        val field = args.getOrNull(3)?.lowercase() ?: return sendSetUsage(sender, label)
+        val rawValue = args.drop(4).joinToString(" ").ifBlank { null }
+        val clearable = rawValue == null || rawValue.equals("none", ignoreCase = true)
+        val value = if (clearable) null else rawValue
+
+        val current = track.appearance ?: ActorAppearance()
+        val updated: ActorAppearance = when (field) {
+            "entitytype" -> {
+                if (value == null) return sender.sendMessage("§cProvide an entity type, e.g. ZOMBIE.")
+                if (runCatching { EntityType.valueOf(value.uppercase()) }.isFailure)
+                    return sender.sendMessage("§cUnknown entity type: §e$value§c.")
+                current.copy(entityType = value.uppercase())
+            }
+            "model" -> current.copy(model = value)
+            "name" -> current.copy(displayName = value)
+            "skin" -> {
+                if (value == null) current.copy(skinTextureValue = null, skinSignature = null)
+                else {
+                    val source = Bukkit.getPlayerExact(value)
+                        ?: return sender.sendMessage("§cPlayer '§e$value§c' is not online.")
+                    val textures = source.playerProfile.properties.firstOrNull { it.name == "textures" }
+                        ?: return sender.sendMessage("§cCould not read §e$value§c's skin.")
+                    current.copy(skinTextureValue = textures.value, skinSignature = textures.signature)
+                }
+            }
+            in equipmentSlots -> current.copy(equipment = setSlot(current.equipment, field, value))
+            else -> return sendSetUsage(sender, label)
+        }
+
+        plugin.actorManager.saveTrack(track.withAppearance(updated))
+        sender.sendMessage("§aSet §e$field§a on track §e$trackId§a to §f${value ?: "none"}§a.")
+    }
+
+    private fun setSlot(eq: ActorEquipment, slot: String, value: String?): ActorEquipment = when (slot) {
+        "mainhand" -> eq.copy(mainHand = value)
+        "offhand" -> eq.copy(offHand = value)
+        "helmet" -> eq.copy(helmet = value)
+        "chestplate" -> eq.copy(chestplate = value)
+        "leggings" -> eq.copy(leggings = value)
+        "boots" -> eq.copy(boots = value)
+        else -> eq
+    }
+
+    private fun sendSetUsage(sender: CommandSender, label: String) {
+        sender.sendMessage("§cUsage: §e/$label actor set <track> <field> <value>")
+        sender.sendMessage("§7fields: §fentitytype, model, name, skin, mainhand, offhand, helmet, chestplate, leggings, boots")
+        sender.sendMessage("§7use §fnone§7 as the value to clear a field; §fskin <player>§7 copies an online player's skin")
     }
 
     // --- spawn an actor (typically called from a CinematicStudio COMMAND node) -------------------
@@ -152,6 +216,7 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
         sender.sendMessage("§e/$label actor record|stop|list|delete §7- manage movement tracks")
         sender.sendMessage("§e/$label spawnactors <track> <player|@a> §7- spawn a recorded actor")
         sender.sendMessage("§e/$label state <track> <player|@a> <state> §7- trigger an actor state")
+        sender.sendMessage("§e/$label reload §7- re-read track files from disk")
     }
 
     // --- tab completion -------------------------------------------------------------------------
@@ -167,8 +232,16 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
             }
             "actor" -> when (args.size) {
                 1 -> listOf("actor")
-                2 -> listOf("record", "stop", "list", "delete")
-                3 -> if (args[1].equals("delete", true)) plugin.actorManager.trackIds() else emptyList()
+                2 -> listOf("record", "stop", "list", "delete", "set")
+                3 -> if (args[1].equals("delete", true) || args[1].equals("set", true)) plugin.actorManager.trackIds() else emptyList()
+                4 -> if (args[1].equals("set", true))
+                    listOf("entitytype", "model", "name", "skin") + equipmentSlots
+                else emptyList()
+                5 -> if (args[1].equals("set", true)) when (args[3].lowercase()) {
+                    "entitytype" -> EntityType.values().map { it.name.lowercase() }
+                    "skin" -> playerTargets().filterNot { it == "@a" } + "none"
+                    else -> listOf("none")
+                } else emptyList()
                 else -> emptyList()
             }
             "spawnactors" -> when (args.size) {
@@ -184,7 +257,7 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
                 4 -> plugin.actorManager.stateNames(args[1])
                 else -> emptyList()
             }
-            else -> if (args.size == 1) listOf("play", "stop", "actor", "spawnactors", "state") else emptyList()
+            else -> if (args.size == 1) listOf("play", "stop", "actor", "spawnactors", "state", "reload") else emptyList()
         }
         val prefix = args.last()
         return out.filter { it.startsWith(prefix, ignoreCase = true) }.toMutableList()

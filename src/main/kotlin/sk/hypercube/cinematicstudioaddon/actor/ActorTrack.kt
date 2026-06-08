@@ -24,6 +24,10 @@ class ActorTrack(
     /** Auto-applied states during playback: track tick -> state name. */
     val timeline: Map<Int, String> = emptyMap()
 ) {
+    /** Returns a copy of this track with a different appearance (frames/states/timeline preserved). */
+    fun withAppearance(newAppearance: ActorAppearance?): ActorTrack =
+        ActorTrack(id, mode, length, frames, keyframes, newAppearance, states, timeline)
+
     /** Resolves the actor's frame at [tick], or null if outside the track. */
     fun frameAt(tick: Int): ActorFrame? {
         if (tick < 0 || tick >= length) return null

@@ -35,6 +35,13 @@ class ActorManager(private val plugin: CinematicStudioAddon) {
         plugin.logger.info("Loaded ${tracks.size} actor track(s).")
     }
 
+    /** Re-reads all track files from disk (does not affect already-running sessions). Returns the count. */
+    fun reload(): Int {
+        tracks.clear()
+        trackStorage.loadAll().forEach { tracks[it.id.lowercase()] = it }
+        return tracks.size
+    }
+
     fun saveTrack(track: ActorTrack) {
         tracks[track.id.lowercase()] = track
         trackStorage.save(track)

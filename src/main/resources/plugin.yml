@@ -10,7 +10,7 @@ softdepend: [CinematicStudio, ProtocolLib, ItemsAdder, ModelEngine]
 commands:
   cinaddon:
     description: CinematicStudioAddon commands
-    usage: /<command> <play|stop|actor|spawnactors|state> ...
+    usage: /<command> <play|stop|actor|spawnactors|state|reload> ...
     aliases: [csa, cinematicaddon]
 
 permissions:
