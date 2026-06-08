@@ -4,6 +4,7 @@ import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.plugin.Plugin
 import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
 import sk.hypercube.cinematicstudioaddon.actor.ActorEntityType
+import sk.hypercube.cinematicstudioaddon.actor.ActorEquipment
 import java.io.File
 
 /** Persists [Scene]s to human-editable `scenes/<id>.yml` files. */
@@ -56,7 +57,15 @@ class SceneStorage(plugin: Plugin) {
             "entityType" to actor.appearance.entityType.name,
             "displayName" to actor.appearance.displayName,
             "skinTextureValue" to actor.appearance.skinTextureValue,
-            "skinSignature" to actor.appearance.skinSignature
+            "skinSignature" to actor.appearance.skinSignature,
+            "equipment" to mapOf(
+                "mainHand" to actor.appearance.equipment.mainHand,
+                "offHand" to actor.appearance.equipment.offHand,
+                "helmet" to actor.appearance.equipment.helmet,
+                "chestplate" to actor.appearance.equipment.chestplate,
+                "leggings" to actor.appearance.equipment.leggings,
+                "boots" to actor.appearance.equipment.boots
+            )
         )
     )
 
@@ -71,11 +80,20 @@ class SceneStorage(plugin: Plugin) {
             )
         } ?: SceneOrigin()
         val appearance = (map["appearance"] as? Map<*, *>)?.let {
+            val eq = it["equipment"] as? Map<*, *>
             ActorAppearance(
                 entityType = ActorEntityType.valueOf(it["entityType"] as? String ?: ActorEntityType.PLAYER.name),
                 displayName = it["displayName"] as? String,
                 skinTextureValue = it["skinTextureValue"] as? String,
-                skinSignature = it["skinSignature"] as? String
+                skinSignature = it["skinSignature"] as? String,
+                equipment = ActorEquipment(
+                    mainHand = eq?.get("mainHand") as? String,
+                    offHand = eq?.get("offHand") as? String,
+                    helmet = eq?.get("helmet") as? String,
+                    chestplate = eq?.get("chestplate") as? String,
+                    leggings = eq?.get("leggings") as? String,
+                    boots = eq?.get("boots") as? String
+                )
             )
         } ?: ActorAppearance()
         return SceneActor(

@@ -7,6 +7,7 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import sk.hypercube.cinematicstudioaddon.CinematicStudioAddon
+import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
 import sk.hypercube.cinematicstudioaddon.scene.Scene
 import sk.hypercube.cinematicstudioaddon.scene.SceneActor
 import java.io.File
@@ -142,11 +143,13 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
                 val scene = args.getOrNull(2)?.let { plugin.sceneManager.getScene(it) }
                     ?: return sender.sendMessage("§cUsage: §e/$label scene addactor <scene> <track> [startTick]")
                 val trackId = args.getOrNull(3) ?: return sender.sendMessage("§cUsage: §e/$label scene addactor <scene> <track> [startTick]")
-                if (plugin.sceneManager.getTrack(trackId) == null) return sender.sendMessage("§cNo such track: §e$trackId§c.")
+                val track = plugin.sceneManager.getTrack(trackId) ?: return sender.sendMessage("§cNo such track: §e$trackId§c.")
                 val startTick = args.getOrNull(4)?.toIntOrNull() ?: 0
-                val updated = scene.copy(actors = scene.actors + SceneActor(trackId = trackId, startTick = startTick))
+                val appearance = track.appearance ?: ActorAppearance()
+                val updated = scene.copy(actors = scene.actors + SceneActor(trackId = trackId, appearance = appearance, startTick = startTick))
                 plugin.sceneManager.saveScene(updated)
-                sender.sendMessage("§aAdded actor (track §e$trackId§a, start §e$startTick§a) to scene §e${scene.id}§a.")
+                val skinNote = if (track.appearance?.skinTextureValue != null) " §7(skin + equipment inherited)" else ""
+                sender.sendMessage("§aAdded actor (track §e$trackId§a, start §e$startTick§a) to scene §e${scene.id}§a.$skinNote")
             }
             "removeactor" -> {
                 val scene = args.getOrNull(2)?.let { plugin.sceneManager.getScene(it) }
@@ -157,6 +160,28 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
                 val updated = scene.copy(actors = scene.actors.filterIndexed { i, _ -> i != index })
                 plugin.sceneManager.saveScene(updated)
                 sender.sendMessage("§aRemoved actor §e[$index]§a from scene §e${scene.id}§a.")
+            }
+            "setskin" -> {
+                val scene = args.getOrNull(2)?.let { plugin.sceneManager.getScene(it) }
+                    ?: return sender.sendMessage("§cUsage: §e/$label scene setskin <scene> <index> <player>")
+                val index = args.getOrNull(3)?.toIntOrNull()
+                    ?: return sender.sendMessage("§cUsage: §e/$label scene setskin <scene> <index> <player>")
+                if (index !in scene.actors.indices) return sender.sendMessage("§cIndex out of range (0..${scene.actors.size - 1}).")
+                val playerName = args.getOrNull(4) ?: return sender.sendMessage("§cUsage: §e/$label scene setskin <scene> <index> <player>")
+                val source = Bukkit.getPlayerExact(playerName) ?: return sender.sendMessage("§cPlayer '§e$playerName§c' is not online.")
+                val textures = source.playerProfile.properties.firstOrNull { it.name == "textures" }
+                    ?: return sender.sendMessage("§cCould not read §e$playerName§c's skin.")
+                val actor = scene.actors[index]
+                val newActor = actor.copy(
+                    appearance = actor.appearance.copy(
+                        skinTextureValue = textures.value,
+                        skinSignature = textures.signature,
+                        displayName = actor.appearance.displayName ?: source.name
+                    )
+                )
+                val updated = scene.copy(actors = scene.actors.mapIndexed { i, a -> if (i == index) newActor else a })
+                plugin.sceneManager.saveScene(updated)
+                sender.sendMessage("§aSet actor §e[$index]§a skin to §e${source.name}§a's.")
             }
             "play" -> {
                 val scene = args.getOrNull(2)?.let { plugin.sceneManager.getScene(it) }
@@ -169,7 +194,7 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
             else -> {
                 sender.sendMessage("§e/$label scene create <scene> [cinematic] §7| §edelete <scene> §7| §elist §7| §einfo <scene>")
                 sender.sendMessage("§e/$label scene addactor <scene> <track> [startTick] §7| §eremoveactor <scene> <index>")
-                sender.sendMessage("§e/$label scene play <scene> <player|@a>")
+                sender.sendMessage("§e/$label scene setskin <scene> <index> <player> §7| §eplay <scene> <player|@a>")
             }
         }
     }
@@ -214,9 +239,9 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
             }
             "scene" -> when (args.size) {
                 1 -> listOf("scene")
-                2 -> listOf("create", "delete", "list", "info", "addactor", "removeactor", "play")
+                2 -> listOf("create", "delete", "list", "info", "addactor", "removeactor", "setskin", "play")
                 3 -> when (args[1].lowercase()) {
-                    "delete", "info", "addactor", "removeactor", "play" -> plugin.sceneManager.sceneIds()
+                    "delete", "info", "addactor", "removeactor", "setskin", "play" -> plugin.sceneManager.sceneIds()
                     else -> emptyList()
                 }
                 4 -> when (args[1].lowercase()) {
@@ -225,6 +250,7 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
                     "play" -> playerTargets()
                     else -> emptyList()
                 }
+                5 -> if (args[1].equals("setskin", true)) playerTargets() else emptyList()
                 else -> emptyList()
             }
             else -> if (args.size == 1) listOf("play", "stop", "actor", "scene") else emptyList()

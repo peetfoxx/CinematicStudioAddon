@@ -3,6 +3,9 @@ package sk.hypercube.cinematicstudioaddon.record
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.plugin.Plugin
 import sk.hypercube.cinematicstudioaddon.actor.ActorAnimation
+import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
+import sk.hypercube.cinematicstudioaddon.actor.ActorEntityType
+import sk.hypercube.cinematicstudioaddon.actor.ActorEquipment
 import sk.hypercube.cinematicstudioaddon.actor.ActorFlag
 import sk.hypercube.cinematicstudioaddon.actor.ActorFrame
 import sk.hypercube.cinematicstudioaddon.actor.ActorPose
@@ -34,6 +37,18 @@ class TrackStorage(plugin: Plugin) {
             TrackMode.RECORDED -> cfg.set("frames", track.frames.map { encodeFrame(it) })
             TrackMode.KEYFRAMED -> cfg.set("keyframes", track.keyframes.map { encodeKeyframe(it) })
         }
+        track.appearance?.let { a ->
+            cfg.set("appearance.entityType", a.entityType.name)
+            cfg.set("appearance.displayName", a.displayName)
+            cfg.set("appearance.skinTextureValue", a.skinTextureValue)
+            cfg.set("appearance.skinSignature", a.skinSignature)
+            cfg.set("appearance.equipment.mainHand", a.equipment.mainHand)
+            cfg.set("appearance.equipment.offHand", a.equipment.offHand)
+            cfg.set("appearance.equipment.helmet", a.equipment.helmet)
+            cfg.set("appearance.equipment.chestplate", a.equipment.chestplate)
+            cfg.set("appearance.equipment.leggings", a.equipment.leggings)
+            cfg.set("appearance.equipment.boots", a.equipment.boots)
+        }
         cfg.save(File(dir, "${track.id.lowercase()}.yml"))
     }
 
@@ -44,9 +59,25 @@ class TrackStorage(plugin: Plugin) {
         val id = cfg.getString("id") ?: file.nameWithoutExtension
         val mode = TrackMode.valueOf(cfg.getString("mode") ?: TrackMode.RECORDED.name)
         val length = cfg.getInt("length")
+        val appearance = if (cfg.isConfigurationSection("appearance")) {
+            ActorAppearance(
+                entityType = ActorEntityType.valueOf(cfg.getString("appearance.entityType") ?: ActorEntityType.PLAYER.name),
+                displayName = cfg.getString("appearance.displayName"),
+                skinTextureValue = cfg.getString("appearance.skinTextureValue"),
+                skinSignature = cfg.getString("appearance.skinSignature"),
+                equipment = ActorEquipment(
+                    mainHand = cfg.getString("appearance.equipment.mainHand"),
+                    offHand = cfg.getString("appearance.equipment.offHand"),
+                    helmet = cfg.getString("appearance.equipment.helmet"),
+                    chestplate = cfg.getString("appearance.equipment.chestplate"),
+                    leggings = cfg.getString("appearance.equipment.leggings"),
+                    boots = cfg.getString("appearance.equipment.boots")
+                )
+            )
+        } else null
         return when (mode) {
-            TrackMode.RECORDED -> ActorTrack(id, mode, length, frames = cfg.getStringList("frames").map { decodeFrame(it) })
-            TrackMode.KEYFRAMED -> ActorTrack(id, mode, length, keyframes = cfg.getStringList("keyframes").map { decodeKeyframe(it) })
+            TrackMode.RECORDED -> ActorTrack(id, mode, length, frames = cfg.getStringList("frames").map { decodeFrame(it) }, appearance = appearance)
+            TrackMode.KEYFRAMED -> ActorTrack(id, mode, length, keyframes = cfg.getStringList("keyframes").map { decodeKeyframe(it) }, appearance = appearance)
         }
     }
 

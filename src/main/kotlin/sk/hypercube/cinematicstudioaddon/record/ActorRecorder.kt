@@ -3,10 +3,14 @@ package sk.hypercube.cinematicstudioaddon.record
 import org.bukkit.entity.Player
 import org.bukkit.plugin.Plugin
 import org.bukkit.scheduler.BukkitTask
+import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
+import sk.hypercube.cinematicstudioaddon.actor.ActorEntityType
+import sk.hypercube.cinematicstudioaddon.actor.ActorEquipment
 import sk.hypercube.cinematicstudioaddon.actor.ActorFlag
 import sk.hypercube.cinematicstudioaddon.actor.ActorFrame
 import sk.hypercube.cinematicstudioaddon.actor.ActorPose
 import sk.hypercube.cinematicstudioaddon.actor.ActorTrack
+import sk.hypercube.cinematicstudioaddon.actor.ItemCodec
 import sk.hypercube.cinematicstudioaddon.actor.TrackMode
 import java.util.UUID
 
@@ -18,7 +22,12 @@ import java.util.UUID
  */
 class ActorRecorder(private val plugin: Plugin) {
 
-    private class Session(val trackId: String, val frames: MutableList<ActorFrame>, var task: BukkitTask?)
+    private class Session(
+        val trackId: String,
+        val frames: MutableList<ActorFrame>,
+        val appearance: ActorAppearance,
+        var task: BukkitTask?
+    )
 
     private val sessions = HashMap<UUID, Session>()
 
@@ -27,7 +36,7 @@ class ActorRecorder(private val plugin: Plugin) {
     /** Begins recording [player] into a track named [trackId]. Returns false if already recording. */
     fun start(player: Player, trackId: String): Boolean {
         if (isRecording(player)) return false
-        val session = Session(trackId, mutableListOf(), null)
+        val session = Session(trackId, mutableListOf(), captureAppearance(player), null)
         session.task = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
             val loc = player.location
             session.frames += ActorFrame(
@@ -49,7 +58,28 @@ class ActorRecorder(private val plugin: Plugin) {
             id = session.trackId,
             mode = TrackMode.RECORDED,
             length = session.frames.size,
-            frames = session.frames
+            frames = session.frames,
+            appearance = session.appearance
+        )
+    }
+
+    /** Snapshots the player's skin and worn equipment so the actor looks like them. */
+    private fun captureAppearance(player: Player): ActorAppearance {
+        val textures = player.playerProfile.properties.firstOrNull { it.name == "textures" }
+        val eq = player.equipment
+        return ActorAppearance(
+            entityType = ActorEntityType.PLAYER,
+            displayName = player.name,
+            skinTextureValue = textures?.value,
+            skinSignature = textures?.signature,
+            equipment = ActorEquipment(
+                mainHand = ItemCodec.encode(eq?.itemInMainHand),
+                offHand = ItemCodec.encode(eq?.itemInOffHand),
+                helmet = ItemCodec.encode(eq?.helmet),
+                chestplate = ItemCodec.encode(eq?.chestplate),
+                leggings = ItemCodec.encode(eq?.leggings),
+                boots = ItemCodec.encode(eq?.boots)
+            )
         )
     }
 

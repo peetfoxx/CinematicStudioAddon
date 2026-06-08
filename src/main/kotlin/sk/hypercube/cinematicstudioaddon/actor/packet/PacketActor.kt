@@ -4,6 +4,7 @@ import com.comphenix.protocol.PacketType
 import com.comphenix.protocol.ProtocolManager
 import com.comphenix.protocol.events.PacketContainer
 import com.comphenix.protocol.wrappers.EnumWrappers
+import com.comphenix.protocol.wrappers.Pair
 import com.comphenix.protocol.wrappers.PlayerInfoData
 import com.comphenix.protocol.wrappers.WrappedChatComponent
 import com.comphenix.protocol.wrappers.WrappedDataValue
@@ -12,6 +13,7 @@ import com.comphenix.protocol.wrappers.WrappedGameProfile
 import com.comphenix.protocol.wrappers.WrappedSignedProperty
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
+import org.bukkit.inventory.ItemStack
 import org.bukkit.plugin.Plugin
 import sk.hypercube.cinematicstudioaddon.actor.ActorAnimation
 import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
@@ -19,6 +21,7 @@ import sk.hypercube.cinematicstudioaddon.actor.ActorFlag
 import sk.hypercube.cinematicstudioaddon.actor.ActorFrame
 import sk.hypercube.cinematicstudioaddon.actor.ActorHandle
 import sk.hypercube.cinematicstudioaddon.actor.ActorPose
+import sk.hypercube.cinematicstudioaddon.actor.ItemCodec
 import java.util.EnumSet
 import java.util.UUID
 
@@ -61,6 +64,7 @@ class PacketActor(
         send(viewer, addPlayerInfoPacket())
         send(viewer, spawnPacket(frame))
         send(viewer, metadataPacket(stateByte(frame)))
+        equipmentPacket()?.let { send(viewer, it) }
         send(viewer, headRotationPacket(angle(frame.headYaw)))
     }
 
@@ -197,6 +201,26 @@ class PacketActor(
     private fun destroyPacket(): PacketContainer {
         val packet = protocol.createPacket(PacketType.Play.Server.ENTITY_DESTROY)
         packet.intLists.write(0, listOf(entityId))
+        return packet
+    }
+
+    /** Builds an ENTITY_EQUIPMENT packet for all non-empty slots, or null if the actor is unequipped. */
+    private fun equipmentPacket(): PacketContainer? {
+        val eq = appearance.equipment
+        val pairs = ArrayList<Pair<EnumWrappers.ItemSlot, ItemStack>>()
+        fun add(slot: EnumWrappers.ItemSlot, data: String?) {
+            ItemCodec.decode(data)?.let { pairs.add(Pair(slot, it)) }
+        }
+        add(EnumWrappers.ItemSlot.HEAD, eq.helmet)
+        add(EnumWrappers.ItemSlot.CHEST, eq.chestplate)
+        add(EnumWrappers.ItemSlot.LEGS, eq.leggings)
+        add(EnumWrappers.ItemSlot.FEET, eq.boots)
+        add(EnumWrappers.ItemSlot.MAINHAND, eq.mainHand)
+        add(EnumWrappers.ItemSlot.OFFHAND, eq.offHand)
+        if (pairs.isEmpty()) return null
+        val packet = protocol.createPacket(PacketType.Play.Server.ENTITY_EQUIPMENT)
+        packet.integers.write(0, entityId)
+        packet.slotStackPairLists.write(0, pairs)
         return packet
     }
 
