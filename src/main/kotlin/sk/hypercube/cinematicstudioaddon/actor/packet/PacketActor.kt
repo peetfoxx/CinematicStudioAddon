@@ -202,6 +202,14 @@ class PacketActor(
 
     // --- helpers --------------------------------------------------------------------------------
 
+    private fun send(viewer: Player, packet: PacketContainer) {
+        try {
+            protocol.sendServerPacket(viewer, packet)
+        } catch (ex: Exception) {
+            plugin.logger.warning("Failed to send ${packet.type} to ${viewer.name}: ${ex.message}")
+        }
+    }
+
     private fun buildProfile(): WrappedGameProfile {
         val profile = WrappedGameProfile(uuid, sanitizeName(appearance.displayName))
         val texture = appearance.skinTextureValue
