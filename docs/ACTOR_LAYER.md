@@ -66,8 +66,10 @@ version-guarded for the target MC version. Packets are sent only to the session'
 ## Build roadmap
 
 1. ✅ `CinematicBridge` console play-for-player (shipped).
-2. **Skeleton** — data model + engine interfaces + session/manager wiring (this commit).
-3. `PacketActorBackend` for PLAYER actors (spawn → move → despawn), per-viewer.
+2. ✅ Skeleton — data model + engine interfaces + session/manager wiring.
+3. ✅ `PacketActorBackend` for PLAYER actors — per-viewer spawn (skin), relative movement, head
+   rotation, sneaking/glow/fire/invisible, swing animations. **Needs in-game testing on 1.21.4.**
 4. `ActorRecorder` capture + JSON track persistence + `/cinaddon actor` commands.
 5. `SceneManager` persistence + `/cinaddon scene` commands; wire `play` to bridge + session.
-6. Animations/equipment/poses; keyframe authoring; `actorCameraOffsetTicks` tuning.
+6. Remaining packet work: equipment, full poses (swimming/sleeping/sitting), hurt/crit animations,
+   large-jump teleport polish, non-PLAYER entity types; keyframe authoring; `actorCameraOffsetTicks`.

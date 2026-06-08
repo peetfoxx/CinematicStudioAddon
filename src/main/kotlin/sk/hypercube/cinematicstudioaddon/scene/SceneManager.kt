@@ -13,10 +13,22 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class SceneManager(private val plugin: CinematicStudioAddon) {
 
-    private val backend: ActorBackend = PacketActorBackend()
     private val scenes = ConcurrentHashMap<String, Scene>()
     private val tracks = ConcurrentHashMap<String, ActorTrack>()
     private val sessions = mutableListOf<SceneSession>()
+
+    /**
+     * Built lazily and only if ProtocolLib is present (the backend touches ProtocolLib classes
+     * eagerly). Null means actors are unavailable; cinematics still play.
+     */
+    private val backend: ActorBackend? by lazy {
+        if (plugin.server.pluginManager.getPlugin("ProtocolLib")?.isEnabled == true) {
+            PacketActorBackend(plugin)
+        } else {
+            plugin.logger.warning("ProtocolLib not found - actor playback is disabled (cinematics still play).")
+            null
+        }
+    }
 
     fun getScene(id: String): Scene? = scenes[id.lowercase()]
     fun getTrack(id: String): ActorTrack? = tracks[id.lowercase()]
@@ -27,6 +39,12 @@ class SceneManager(private val plugin: CinematicStudioAddon) {
     fun play(scene: Scene, viewers: Collection<Player>) {
         scene.cinematic?.let { cinematic ->
             viewers.forEach { plugin.bridge.playFor(it, cinematic) }
+        }
+        if (scene.actors.isEmpty()) return
+        val backend = this.backend
+        if (backend == null) {
+            plugin.logger.warning("Scene '${scene.id}' has actors but ProtocolLib is unavailable; skipping actors.")
+            return
         }
         val session = SceneSession(
             plugin = plugin,
