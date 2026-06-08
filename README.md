@@ -38,8 +38,42 @@ on the intended viewer no matter who triggered it.
 | `/cinaddon actor stop` | Save the recording |
 | `/cinaddon actor list` / `delete <track>` | Manage recorded tracks |
 | `/cinaddon spawnactors <track> <player\|@a>` | Spawn a recorded actor for player(s) |
+| `/cinaddon state <track> <player\|@a> <state>` | Trigger a named actor state |
 
 Aliases: `/csa`, `/cinematicaddon`
+
+### Customizing an actor
+
+A recorded track is saved to `actortracks/<track>.yml`. Edit the `appearance` section to change how
+the actor looks, and add `states` / `timeline` to script changes during playback:
+
+```yaml
+appearance:
+  entityType: PLAYER          # any Bukkit entity type: ZOMBIE, ARMOR_STAND, ...
+  displayName: "Town Guard"   # profile name (players) / name tag (mobs)
+  skinTextureValue: "..."     # captured from the recorder; editable
+  equipment:
+    mainHand: "itemsadder:weapons:ruby_sword"   # ItemsAdder id
+    helmet: "DIAMOND_HELMET"                     # material name
+    # (recorded items are stored as base64 here automatically)
+
+states:
+  draw_weapon:
+    flags: [GLOWING]
+    name: "Town Guard (!)"
+    equipment:
+      mainHand: "ia:weapons:ruby_sword"
+    animation: attack          # reserved for ModelEngine
+
+timeline:                      # auto-apply states at track ticks
+  40: draw_weapon
+```
+
+Item specs accept an ItemsAdder id (`itemsadder:ns:id` / `ia:ns:id`), a material
+(`mc:DIAMOND_SWORD` or `DIAMOND_SWORD`), or a captured base64 ItemStack.
+
+States can also be triggered live from a CinematicStudio **COMMAND node**:
+`cinaddon state guard %player% draw_weapon` (`console: true`).
 
 ### Quick start: a custom actor
 

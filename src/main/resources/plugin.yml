@@ -5,12 +5,12 @@ api-version: '1.13'
 author: peetfoxx
 description: Open-source companion for CinematicStudio - console-triggered playback for specific players, and more.
 website: https://github.com/peetfoxx/CinematicStudioAddon
-softdepend: [CinematicStudio, ProtocolLib]
+softdepend: [CinematicStudio, ProtocolLib, ItemsAdder]
 
 commands:
   cinaddon:
     description: CinematicStudioAddon commands
-    usage: /<command> <play|stop|actor|spawnactors> ...
+    usage: /<command> <play|stop|actor|spawnactors|state> ...
     aliases: [csa, cinematicaddon]
 
 permissions:

@@ -4,11 +4,11 @@ import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.plugin.Plugin
 import sk.hypercube.cinematicstudioaddon.actor.ActorAnimation
 import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
-import sk.hypercube.cinematicstudioaddon.actor.ActorEntityType
 import sk.hypercube.cinematicstudioaddon.actor.ActorEquipment
 import sk.hypercube.cinematicstudioaddon.actor.ActorFlag
 import sk.hypercube.cinematicstudioaddon.actor.ActorFrame
 import sk.hypercube.cinematicstudioaddon.actor.ActorPose
+import sk.hypercube.cinematicstudioaddon.actor.ActorState
 import sk.hypercube.cinematicstudioaddon.actor.ActorTrack
 import sk.hypercube.cinematicstudioaddon.actor.Easing
 import sk.hypercube.cinematicstudioaddon.actor.Keyframe
@@ -38,17 +38,20 @@ class TrackStorage(plugin: Plugin) {
             TrackMode.KEYFRAMED -> cfg.set("keyframes", track.keyframes.map { encodeKeyframe(it) })
         }
         track.appearance?.let { a ->
-            cfg.set("appearance.entityType", a.entityType.name)
+            cfg.set("appearance.entityType", a.entityType)
             cfg.set("appearance.displayName", a.displayName)
             cfg.set("appearance.skinTextureValue", a.skinTextureValue)
             cfg.set("appearance.skinSignature", a.skinSignature)
-            cfg.set("appearance.equipment.mainHand", a.equipment.mainHand)
-            cfg.set("appearance.equipment.offHand", a.equipment.offHand)
-            cfg.set("appearance.equipment.helmet", a.equipment.helmet)
-            cfg.set("appearance.equipment.chestplate", a.equipment.chestplate)
-            cfg.set("appearance.equipment.leggings", a.equipment.leggings)
-            cfg.set("appearance.equipment.boots", a.equipment.boots)
+            writeEquipment(cfg, "appearance.equipment", a.equipment)
         }
+        track.states.forEach { (name, state) ->
+            val base = "states.$name"
+            state.flags?.let { cfg.set("$base.flags", it.map { f -> f.name }) }
+            cfg.set("$base.name", state.name)
+            cfg.set("$base.animation", state.animation)
+            state.equipment?.let { writeEquipment(cfg, "$base.equipment", it) }
+        }
+        track.timeline.forEach { (tick, name) -> cfg.set("timeline.$tick", name) }
         cfg.save(File(dir, "${track.id.lowercase()}.yml"))
     }
 
@@ -61,25 +64,58 @@ class TrackStorage(plugin: Plugin) {
         val length = cfg.getInt("length")
         val appearance = if (cfg.isConfigurationSection("appearance")) {
             ActorAppearance(
-                entityType = ActorEntityType.valueOf(cfg.getString("appearance.entityType") ?: ActorEntityType.PLAYER.name),
+                entityType = cfg.getString("appearance.entityType") ?: "PLAYER",
                 displayName = cfg.getString("appearance.displayName"),
                 skinTextureValue = cfg.getString("appearance.skinTextureValue"),
                 skinSignature = cfg.getString("appearance.skinSignature"),
-                equipment = ActorEquipment(
-                    mainHand = cfg.getString("appearance.equipment.mainHand"),
-                    offHand = cfg.getString("appearance.equipment.offHand"),
-                    helmet = cfg.getString("appearance.equipment.helmet"),
-                    chestplate = cfg.getString("appearance.equipment.chestplate"),
-                    leggings = cfg.getString("appearance.equipment.leggings"),
-                    boots = cfg.getString("appearance.equipment.boots")
-                )
+                equipment = readEquipment(cfg, "appearance.equipment")
             )
         } else null
+
+        val states = HashMap<String, ActorState>()
+        cfg.getConfigurationSection("states")?.getKeys(false)?.forEach { name ->
+            val base = "states.$name"
+            val flags = cfg.getStringList("$base.flags")
+                .mapNotNull { runCatching { ActorFlag.valueOf(it) }.getOrNull() }
+                .toSet().ifEmpty { null }
+            val equipment = if (cfg.isConfigurationSection("$base.equipment")) readEquipment(cfg, "$base.equipment") else null
+            states[name] = ActorState(
+                flags = flags,
+                name = cfg.getString("$base.name"),
+                equipment = equipment,
+                animation = cfg.getString("$base.animation")
+            )
+        }
+
+        val timeline = HashMap<Int, String>()
+        cfg.getConfigurationSection("timeline")?.getKeys(false)?.forEach { key ->
+            val tick = key.toIntOrNull() ?: return@forEach
+            cfg.getString("timeline.$key")?.let { timeline[tick] = it }
+        }
+
         return when (mode) {
-            TrackMode.RECORDED -> ActorTrack(id, mode, length, frames = cfg.getStringList("frames").map { decodeFrame(it) }, appearance = appearance)
-            TrackMode.KEYFRAMED -> ActorTrack(id, mode, length, keyframes = cfg.getStringList("keyframes").map { decodeKeyframe(it) }, appearance = appearance)
+            TrackMode.RECORDED -> ActorTrack(id, mode, length, frames = cfg.getStringList("frames").map { decodeFrame(it) }, appearance = appearance, states = states, timeline = timeline)
+            TrackMode.KEYFRAMED -> ActorTrack(id, mode, length, keyframes = cfg.getStringList("keyframes").map { decodeKeyframe(it) }, appearance = appearance, states = states, timeline = timeline)
         }
     }
+
+    private fun writeEquipment(cfg: YamlConfiguration, base: String, eq: ActorEquipment) {
+        cfg.set("$base.mainHand", eq.mainHand)
+        cfg.set("$base.offHand", eq.offHand)
+        cfg.set("$base.helmet", eq.helmet)
+        cfg.set("$base.chestplate", eq.chestplate)
+        cfg.set("$base.leggings", eq.leggings)
+        cfg.set("$base.boots", eq.boots)
+    }
+
+    private fun readEquipment(cfg: YamlConfiguration, base: String): ActorEquipment = ActorEquipment(
+        mainHand = cfg.getString("$base.mainHand"),
+        offHand = cfg.getString("$base.offHand"),
+        helmet = cfg.getString("$base.helmet"),
+        chestplate = cfg.getString("$base.chestplate"),
+        leggings = cfg.getString("$base.leggings"),
+        boots = cfg.getString("$base.boots")
+    )
 
     companion object {
         // Frame:    x;y;z;yaw;pitch;headYaw;pose;flagsCsv;animsCsv

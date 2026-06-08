@@ -39,6 +39,7 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
             "play", "stop" -> handlePlayStop(sender, label, args)
             "actor" -> handleActor(sender, label, args)
             "spawnactors" -> handleSpawnActors(sender, label, args)
+            "state" -> handleState(sender, label, args)
             else -> sendUsage(sender, label)
         }
         return true
@@ -118,6 +119,20 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
         // once per viewer, and we don't want to spam the console.
     }
 
+    // --- trigger a named state on a live actor (typically from a COMMAND node) -------------------
+
+    private fun handleState(sender: CommandSender, label: String, args: Array<out String>) {
+        val trackId = args.getOrNull(1) ?: return sender.sendMessage("§cUsage: §e/$label state <track> <player|@a> <state>")
+        if (plugin.actorManager.getTrack(trackId) == null) return sender.sendMessage("§cNo such track: §e$trackId§c.")
+        val targetArg = args.getOrNull(2) ?: return sender.sendMessage("§cUsage: §e/$label state <track> <player|@a> <state>")
+        val stateName = args.getOrNull(3) ?: return sender.sendMessage("§cUsage: §e/$label state <track> <player|@a> <state>")
+        val targets = resolveTargets(sender, targetArg) ?: return
+        if (!plugin.actorManager.applyState(trackId, targets, stateName)) {
+            sender.sendMessage("§cNo such state '§e$stateName§c' on track §e$trackId§c.")
+        }
+        // Success is silent (typically fired by a console COMMAND node).
+    }
+
     // --- helpers --------------------------------------------------------------------------------
 
     /** Resolves a player target arg (`@a`/`--all` = everyone online). Messages and returns null on failure. */
@@ -137,6 +152,7 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
         sender.sendMessage("§e/$label play|stop <cinematic> <player|@a> §7- direct cinematic playback")
         sender.sendMessage("§e/$label actor record|stop|list|delete §7- manage movement tracks")
         sender.sendMessage("§e/$label spawnactors <track> <player|@a> §7- spawn a recorded actor")
+        sender.sendMessage("§e/$label state <track> <player|@a> <state> §7- trigger an actor state")
     }
 
     // --- tab completion -------------------------------------------------------------------------
@@ -162,7 +178,14 @@ class CinematicAddonCommand(private val plugin: CinematicStudioAddon) : CommandE
                 3 -> playerTargets()
                 else -> emptyList()
             }
-            else -> if (args.size == 1) listOf("play", "stop", "actor", "spawnactors") else emptyList()
+            "state" -> when (args.size) {
+                1 -> listOf("state")
+                2 -> plugin.actorManager.trackIds()
+                3 -> playerTargets()
+                4 -> plugin.actorManager.stateNames(args[1])
+                else -> emptyList()
+            }
+            else -> if (args.size == 1) listOf("play", "stop", "actor", "spawnactors", "state") else emptyList()
         }
         val prefix = args.last()
         return out.filter { it.startsWith(prefix, ignoreCase = true) }.toMutableList()

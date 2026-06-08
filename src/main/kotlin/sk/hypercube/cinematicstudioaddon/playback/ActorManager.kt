@@ -69,6 +69,22 @@ class ActorManager(private val plugin: CinematicStudioAddon) {
         return true
     }
 
+    fun stateNames(trackId: String): List<String> = getTrack(trackId)?.states?.keys?.sorted() ?: emptyList()
+
+    /**
+     * Applies a named state to the live actor(s) of [trackId] currently shown to any of [players].
+     * Returns false if the track or state name is unknown.
+     */
+    fun applyState(trackId: String, players: Collection<Player>, stateName: String): Boolean {
+        val track = getTrack(trackId) ?: return false
+        val state = track.states[stateName] ?: return false
+        val targets = players.toSet()
+        synchronized(sessions) { sessions.toList() }
+            .filter { it.trackId.equals(trackId, ignoreCase = true) && targets.any { p -> it.appliesTo(p) } }
+            .forEach { it.applyState(state) }
+        return true
+    }
+
     fun handleQuit(player: Player) {
         synchronized(sessions) { sessions.toList() }.forEach { it.removeViewer(player) }
     }

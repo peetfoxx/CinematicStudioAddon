@@ -68,5 +68,10 @@ not listed) → `SPAWN_ENTITY` → `ENTITY_METADATA` (skin parts 0x7F @ index 17
    sneaking/glow/fire/invisible, swing animations, equipment. **Needs in-game testing on 1.21.4.**
 4. ✅ `ActorRecorder` capture (movement + skin + equipment) + persistence + `/cinaddon actor`.
 5. ✅ `spawnactors` command + `ActorManager` (scenes removed; COMMAND-node driven).
-6. Remaining: per-frame equipment/item-use, full poses (swimming/sleeping/sitting), hurt/crit
-   animations, non-PLAYER entity types, keyframe authoring.
+6. ✅ Customization: arbitrary entity type, custom name, equipment (ItemsAdder / material / base64
+   via `ItemResolver`), skin; named **states** (flags/name/equipment) triggered by the track
+   `timeline:` or `/cinaddon state` (e.g. a COMMAND node).
+7. **ModelEngine** (next): custom models. Needs a real base entity (global visibility), driven each
+   tick + MEG animations wired to `ActorState.animation`. Soft-hooked via reflection.
+8. Remaining: per-frame equipment/item-use, full poses (swimming/sleeping/sitting), hurt/crit
+   animations, keyframe authoring.

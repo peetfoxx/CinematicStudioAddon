@@ -17,24 +17,24 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.plugin.Plugin
 import sk.hypercube.cinematicstudioaddon.actor.ActorAnimation
 import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
+import sk.hypercube.cinematicstudioaddon.actor.ActorEquipment
 import sk.hypercube.cinematicstudioaddon.actor.ActorFlag
 import sk.hypercube.cinematicstudioaddon.actor.ActorFrame
 import sk.hypercube.cinematicstudioaddon.actor.ActorHandle
 import sk.hypercube.cinematicstudioaddon.actor.ActorPose
-import sk.hypercube.cinematicstudioaddon.actor.ItemCodec
+import sk.hypercube.cinematicstudioaddon.actor.ItemResolver
 import java.util.EnumSet
+import java.util.Optional
 import java.util.UUID
 
 /**
- * A single packet-based PLAYER actor, rendered only for its viewers as a client-side fake entity.
+ * A single packet-based actor (PLAYER or any other entity type), rendered only for its viewers.
  *
- * Target: Minecraft 1.20.5 - 1.21.x.
- * - Movement uses REL_ENTITY_MOVE_LOOK (stable across versions); jumps beyond a short delta
- *   (~8 blocks/tick) fall back to a destroy + respawn at the new position.
- * - The skin-parts metadata index (17) and shared-flags index (0) are the 1.20.5+ values.
+ * Target: Minecraft 1.20.5 - 1.21.x. Movement uses REL_ENTITY_MOVE_LOOK; jumps beyond a short delta
+ * (~8 blocks/tick) fall back to destroy + respawn. Shared-data metadata indices used: 0 flags,
+ * 2 custom name, 3 custom-name-visible, 17 skin parts (PLAYER only).
  *
- * All Bukkit/packet work happens on the main thread (the SceneSession tick task), so no
- * synchronization is needed on the viewer set.
+ * All work happens on the main thread (the ActorSession tick task), so the viewer set needs no locks.
  */
 class PacketActor(
     private val plugin: Plugin,
@@ -46,11 +46,19 @@ class PacketActor(
 
     private val entityId = EntityIds.next()
     private val uuid: UUID = UUID.randomUUID()
-    private val profile: WrappedGameProfile = buildProfile()
+    private val isPlayer = appearance.entityType.equals("PLAYER", ignoreCase = true)
+    private val bukkitType = resolveEntityType(appearance.entityType)
+    private val profile: WrappedGameProfile? = if (isPlayer) buildProfile() else null
+
     private val byteSerializer = WrappedDataWatcher.Registry.get(java.lang.Byte::class.java)
+    private val boolSerializer = WrappedDataWatcher.Registry.get(java.lang.Boolean::class.java)
+    private val optChatSerializer = WrappedDataWatcher.Registry.getChatComponentSerializer(true)
 
     private var lastFrame: ActorFrame = initial
-    private var lastStateByte: Byte = stateByte(initial)
+    private var lastStateByte: Byte = stateByte(initial.flags, initial.pose)
+    private var overlayFlags: Set<ActorFlag> = emptySet()
+    private var currentName: String? = appearance.displayName
+    private var currentEquipment: ActorEquipment = appearance.equipment
     private var spawned = false
 
     // --- lifecycle ------------------------------------------------------------------------------
@@ -61,9 +69,9 @@ class PacketActor(
     }
 
     private fun spawnFor(viewer: Player, frame: ActorFrame) {
-        send(viewer, addPlayerInfoPacket())
+        if (isPlayer) send(viewer, addPlayerInfoPacket())
         send(viewer, spawnPacket(frame))
-        send(viewer, metadataPacket(stateByte(frame)))
+        send(viewer, metadataPacket(frame))
         equipmentPacket()?.let { send(viewer, it) }
         send(viewer, headRotationPacket(angle(frame.headYaw)))
     }
@@ -71,8 +79,8 @@ class PacketActor(
     override fun despawn() {
         if (!spawned) return
         val destroy = destroyPacket()
-        val remove = removePlayerInfoPacket()
-        viewers.toList().forEach { send(it, destroy); send(it, remove) }
+        val remove = if (isPlayer) removePlayerInfoPacket() else null
+        viewers.toList().forEach { v -> send(v, destroy); remove?.let { send(v, it) } }
         spawned = false
     }
 
@@ -85,7 +93,7 @@ class PacketActor(
         if (!viewers.remove(player)) return
         if (spawned) {
             send(player, destroyPacket())
-            send(player, removePlayerInfoPacket())
+            if (isPlayer) send(player, removePlayerInfoPacket())
         }
     }
 
@@ -103,18 +111,16 @@ class PacketActor(
             val move = moveLookPacket(dx.toShort(), dy.toShort(), dz.toShort(), angle(frame.yaw), angle(frame.pitch))
             viewers.toList().forEach { send(it, move) }
         } else {
-            // Too far for a relative move: snap by respawning at the new location.
             viewers.toList().forEach { send(it, destroyPacket()); spawnFor(it, frame) }
         }
 
         val head = headRotationPacket(angle(frame.headYaw))
         viewers.toList().forEach { send(it, head) }
 
-        val newState = stateByte(frame)
+        val newState = stateByte(frame.flags + overlayFlags, frame.pose)
         if (newState != lastStateByte) {
             lastStateByte = newState
-            val meta = metadataPacket(newState)
-            viewers.toList().forEach { send(it, meta) }
+            sendMetadata(frame)
         }
 
         lastFrame = frame
@@ -126,13 +132,34 @@ class PacketActor(
             val id = when (animation) {
                 ActorAnimation.SWING_MAIN_HAND -> 0
                 ActorAnimation.SWING_OFF_HAND -> 3
-                // TODO(impl): TAKE_DAMAGE / CRITICAL_HIT / MAGIC_CRITICAL_HIT via ENTITY_STATUS or the
-                //  1.19.4+ hurt-animation packet.
                 else -> null
             } ?: continue
             val packet = animationPacket(id)
             viewers.toList().forEach { send(it, packet) }
         }
+    }
+
+    // --- state changes --------------------------------------------------------------------------
+
+    override fun setEquipment(equipment: ActorEquipment) {
+        currentEquipment = equipment
+        if (spawned) equipmentPacket()?.let { p -> viewers.toList().forEach { send(it, p) } }
+    }
+
+    override fun setName(name: String?) {
+        currentName = name
+        if (spawned) sendMetadata(lastFrame)
+    }
+
+    override fun setFlagOverlay(flags: Set<ActorFlag>) {
+        overlayFlags = flags
+        lastStateByte = stateByte(lastFrame.flags + overlayFlags, lastFrame.pose)
+        if (spawned) sendMetadata(lastFrame)
+    }
+
+    private fun sendMetadata(frame: ActorFrame) {
+        val packet = metadataPacket(frame)
+        viewers.toList().forEach { send(it, packet) }
     }
 
     // --- packet builders ------------------------------------------------------------------------
@@ -142,9 +169,8 @@ class PacketActor(
         packet.playerInfoActions.write(0, EnumSet.of(EnumWrappers.PlayerInfoAction.ADD_PLAYER))
         val data = PlayerInfoData(
             profile, 0, EnumWrappers.NativeGameMode.SURVIVAL,
-            WrappedChatComponent.fromText(profile.name)
+            WrappedChatComponent.fromText(profile?.name ?: "Actor")
         )
-        // 1.19.3+: the data list lives at index 1 of the data-list modifier.
         packet.playerInfoDataLists.write(1, listOf(data))
         return packet
     }
@@ -159,20 +185,41 @@ class PacketActor(
         val packet = protocol.createPacket(PacketType.Play.Server.SPAWN_ENTITY)
         packet.integers.write(0, entityId)
         packet.getUUIDs().write(0, uuid)
-        packet.entityTypeModifier.write(0, EntityType.PLAYER)
+        packet.entityTypeModifier.write(0, bukkitType)
         packet.doubles.write(0, frame.x).write(1, frame.y).write(2, frame.z)
         packet.bytes.write(0, angle(frame.pitch)).write(1, angle(frame.yaw))
         return packet
     }
 
-    private fun metadataPacket(state: Byte): PacketContainer {
+    private fun metadataPacket(frame: ActorFrame): PacketContainer {
         val packet = protocol.createPacket(PacketType.Play.Server.ENTITY_METADATA)
         packet.integers.write(0, entityId)
-        val values = listOf(
-            WrappedDataValue(0, byteSerializer, state),            // shared entity flags
-            WrappedDataValue(17, byteSerializer, 0x7F.toByte())    // displayed skin parts (all layers)
-        )
+        val values = ArrayList<WrappedDataValue>()
+        values.add(WrappedDataValue(0, byteSerializer, stateByte(frame.flags + overlayFlags, frame.pose)))
+        val nameComponent: Optional<Any> = currentName?.let { Optional.of(WrappedChatComponent.fromText(it).handle) } ?: Optional.empty()
+        values.add(WrappedDataValue(2, optChatSerializer, nameComponent))
+        values.add(WrappedDataValue(3, boolSerializer, currentName != null))
+        if (isPlayer) values.add(WrappedDataValue(17, byteSerializer, 0x7F.toByte())) // displayed skin parts
         packet.dataValueCollectionModifier.write(0, values)
+        return packet
+    }
+
+    /** Builds an ENTITY_EQUIPMENT packet for all non-empty slots, or null if the actor is unequipped. */
+    private fun equipmentPacket(): PacketContainer? {
+        val pairs = ArrayList<Pair<EnumWrappers.ItemSlot, ItemStack>>()
+        fun add(slot: EnumWrappers.ItemSlot, spec: String?) {
+            ItemResolver.resolve(spec)?.let { pairs.add(Pair(slot, it)) }
+        }
+        add(EnumWrappers.ItemSlot.HEAD, currentEquipment.helmet)
+        add(EnumWrappers.ItemSlot.CHEST, currentEquipment.chestplate)
+        add(EnumWrappers.ItemSlot.LEGS, currentEquipment.leggings)
+        add(EnumWrappers.ItemSlot.FEET, currentEquipment.boots)
+        add(EnumWrappers.ItemSlot.MAINHAND, currentEquipment.mainHand)
+        add(EnumWrappers.ItemSlot.OFFHAND, currentEquipment.offHand)
+        if (pairs.isEmpty()) return null
+        val packet = protocol.createPacket(PacketType.Play.Server.ENTITY_EQUIPMENT)
+        packet.integers.write(0, entityId)
+        packet.slotStackPairLists.write(0, pairs)
         return packet
     }
 
@@ -204,26 +251,6 @@ class PacketActor(
         return packet
     }
 
-    /** Builds an ENTITY_EQUIPMENT packet for all non-empty slots, or null if the actor is unequipped. */
-    private fun equipmentPacket(): PacketContainer? {
-        val eq = appearance.equipment
-        val pairs = ArrayList<Pair<EnumWrappers.ItemSlot, ItemStack>>()
-        fun add(slot: EnumWrappers.ItemSlot, data: String?) {
-            ItemCodec.decode(data)?.let { pairs.add(Pair(slot, it)) }
-        }
-        add(EnumWrappers.ItemSlot.HEAD, eq.helmet)
-        add(EnumWrappers.ItemSlot.CHEST, eq.chestplate)
-        add(EnumWrappers.ItemSlot.LEGS, eq.leggings)
-        add(EnumWrappers.ItemSlot.FEET, eq.boots)
-        add(EnumWrappers.ItemSlot.MAINHAND, eq.mainHand)
-        add(EnumWrappers.ItemSlot.OFFHAND, eq.offHand)
-        if (pairs.isEmpty()) return null
-        val packet = protocol.createPacket(PacketType.Play.Server.ENTITY_EQUIPMENT)
-        packet.integers.write(0, entityId)
-        packet.slotStackPairLists.write(0, pairs)
-        return packet
-    }
-
     // --- helpers --------------------------------------------------------------------------------
 
     private fun send(viewer: Player, packet: PacketContainer) {
@@ -233,6 +260,12 @@ class PacketActor(
             plugin.logger.warning("Failed to send ${packet.type} to ${viewer.name}: ${ex.message}")
         }
     }
+
+    private fun resolveEntityType(name: String): EntityType =
+        runCatching { EntityType.valueOf(name.uppercase()) }.getOrElse {
+            plugin.logger.warning("Unknown actor entity type '$name', falling back to PLAYER.")
+            EntityType.PLAYER
+        }
 
     private fun buildProfile(): WrappedGameProfile {
         val profile = WrappedGameProfile(uuid, sanitizeName(appearance.displayName))
@@ -248,14 +281,13 @@ class PacketActor(
         return if (base.length > 16) base.substring(0, 16) else base
     }
 
-    /** Shared-entity-flags metadata byte (index 0) for the given frame. */
-    private fun stateByte(frame: ActorFrame): Byte {
+    /** Shared-entity-flags metadata byte (index 0). */
+    private fun stateByte(flags: Set<ActorFlag>, pose: ActorPose): Byte {
         var bits = 0
-        if (ActorFlag.ON_FIRE in frame.flags) bits = bits or 0x01
-        if (frame.pose == ActorPose.SNEAKING) bits = bits or 0x02
-        if (ActorFlag.INVISIBLE in frame.flags) bits = bits or 0x20
-        if (ActorFlag.GLOWING in frame.flags) bits = bits or 0x40
-        // TODO(impl): USING_ITEM (hand-state index 8) and full poses (swimming/sleeping via pose index 6).
+        if (ActorFlag.ON_FIRE in flags) bits = bits or 0x01
+        if (pose == ActorPose.SNEAKING) bits = bits or 0x02
+        if (ActorFlag.INVISIBLE in flags) bits = bits or 0x20
+        if (ActorFlag.GLOWING in flags) bits = bits or 0x40
         return bits.toByte()
     }
 

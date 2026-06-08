@@ -17,9 +17,12 @@ class ActorTrack(
     val length: Int,
     val frames: List<ActorFrame> = emptyList(),
     val keyframes: List<Keyframe> = emptyList(),
-    /** Appearance captured from the recording player (skin + equipment), used as the default when
-     *  this track is added to a scene. Null for hand-authored tracks. */
-    val appearance: ActorAppearance? = null
+    /** Appearance captured from the recording player (entity type, skin, equipment, name). */
+    val appearance: ActorAppearance? = null,
+    /** Named states this actor can enter (see [ActorState]). */
+    val states: Map<String, ActorState> = emptyMap(),
+    /** Auto-applied states during playback: track tick -> state name. */
+    val timeline: Map<Int, String> = emptyMap()
 ) {
     /** Resolves the actor's frame at [tick], or null if outside the track. */
     fun frameAt(tick: Int): ActorFrame? {

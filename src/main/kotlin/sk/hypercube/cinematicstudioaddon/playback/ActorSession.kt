@@ -6,6 +6,7 @@ import org.bukkit.scheduler.BukkitTask
 import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
 import sk.hypercube.cinematicstudioaddon.actor.ActorBackend
 import sk.hypercube.cinematicstudioaddon.actor.ActorHandle
+import sk.hypercube.cinematicstudioaddon.actor.ActorState
 import sk.hypercube.cinematicstudioaddon.actor.ActorTrack
 
 /**
@@ -28,6 +29,10 @@ class ActorSession(
     private var handle: ActorHandle? = null
     private var stopped = false
 
+    val trackId: String get() = track.id
+
+    fun appliesTo(player: Player): Boolean = viewers.contains(player)
+
     fun start() {
         if (track.length <= 0 || viewers.isEmpty()) {
             onComplete(this)
@@ -49,7 +54,18 @@ class ActorSession(
             current.update(frame)
             if (frame.animations.isNotEmpty()) current.playAnimations(frame.animations)
         }
+        // Auto-apply any state scheduled for this tick.
+        track.timeline[tick]?.let { name -> track.states[name]?.let { applyState(it) } }
         tick++
+    }
+
+    /** Applies a state to the live actor (no-op if not yet spawned). */
+    fun applyState(state: ActorState) {
+        val h = handle ?: return
+        state.flags?.let { h.setFlagOverlay(it) }
+        state.name?.let { h.setName(it) }
+        state.equipment?.let { h.setEquipment(it) }
+        // state.animation is handled by the ModelEngine integration (not yet wired).
     }
 
     fun stop() {

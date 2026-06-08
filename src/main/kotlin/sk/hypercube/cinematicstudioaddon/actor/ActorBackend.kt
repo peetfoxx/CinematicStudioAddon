@@ -18,6 +18,15 @@ interface ActorHandle {
     /** Fire one-shot animations for the current tick. */
     fun playAnimations(animations: Set<ActorAnimation>)
 
+    /** Replace the actor's equipment (item specs resolved by [sk.hypercube.cinematicstudioaddon.actor.ItemResolver]). */
+    fun setEquipment(equipment: ActorEquipment)
+
+    /** Set or clear the actor's custom name. */
+    fun setName(name: String?)
+
+    /** Overlay flags merged on top of the per-tick frame flags (e.g. glow during a state). */
+    fun setFlagOverlay(flags: Set<ActorFlag>)
+
     fun addViewer(player: Player)
     fun removeViewer(player: Player)
 

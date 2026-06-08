@@ -4,7 +4,6 @@ import org.bukkit.entity.Player
 import org.bukkit.plugin.Plugin
 import org.bukkit.scheduler.BukkitTask
 import sk.hypercube.cinematicstudioaddon.actor.ActorAppearance
-import sk.hypercube.cinematicstudioaddon.actor.ActorEntityType
 import sk.hypercube.cinematicstudioaddon.actor.ActorEquipment
 import sk.hypercube.cinematicstudioaddon.actor.ActorFlag
 import sk.hypercube.cinematicstudioaddon.actor.ActorFrame
@@ -68,7 +67,7 @@ class ActorRecorder(private val plugin: Plugin) {
         val textures = player.playerProfile.properties.firstOrNull { it.name == "textures" }
         val eq = player.equipment
         return ActorAppearance(
-            entityType = ActorEntityType.PLAYER,
+            entityType = "PLAYER",
             displayName = player.name,
             skinTextureValue = textures?.value,
             skinSignature = textures?.signature,

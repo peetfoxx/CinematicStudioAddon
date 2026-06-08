@@ -1,8 +1,5 @@
 package sk.hypercube.cinematicstudioaddon.actor
 
-/** What kind of entity an actor is rendered as. Extend as backends gain support. */
-enum class ActorEntityType { PLAYER, ZOMBIE, ARMOR_STAND }
-
 /** Persistent body pose, applied via entity metadata. */
 enum class ActorPose { STANDING, SNEAKING, SWIMMING, SLEEPING, SITTING, FALL_FLYING }
 
